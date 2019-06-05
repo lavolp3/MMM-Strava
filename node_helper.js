@@ -331,6 +331,7 @@ module.exports = NodeHelper.create({
         var moduleConfig = this.configs[moduleIdentifier].config;
         var activitySummary = Object.create(null);
         var activityName;
+        var segments = {};
         // Initialise activity summary
         var periodIntervals = moduleConfig.period === "ytd" ? moment.monthsShort() : moment.weekdaysShort();
         for (var activity in moduleConfig.activities) {
@@ -341,6 +342,7 @@ module.exports = NodeHelper.create({
                     total_elevation_gain: 0,
                     total_moving_time: 0,
                     max_interval_distance: 0,
+                    activityIDs: [],
                     intervals: Array(periodIntervals.length).fill(0)
                 };
             }
@@ -354,6 +356,7 @@ module.exports = NodeHelper.create({
             if (activityTypeSummary) {
                 var distance = activityList[i].distance;
                 activityTypeSummary.total_distance += distance;
+                activityTypeSummary.activityIDs[i] = (activityList[i].id);
                 activityTypeSummary.total_elevation_gain += activityList[i].total_elevation_gain;
                 activityTypeSummary.total_moving_time += activityList[i].moving_time;
                 const activityDate = moment(activityList[i].start_date_local);

@@ -168,15 +168,15 @@ Module.register("MMM-Strava", {
      */
     getTemplateData: function() {
         moment.locale(this.config.locale);
-        console.log("Data: "+JSON.stringify(this.data));
-        console.log("ytd Distance: "+this.data.ytd_run_totals.distance / 1000);
+        //console.log("Data: "+JSON.stringify(this.data));
+        //console.log("ytd Distance: "+this.data.ytd_run_totals.distance / 1000);
         return {
             config: this.config,
             loading: this.loading,
             error: this.error || null,
             data: this.data || {},
             chart: {bars: this.config.period === "ytd" ? moment.monthsShort() : moment.weekdaysShort() },
-            barOffset: Math.round(this.addOffset(this.data.ytd_run_totals.distance / 1000))
+            //barOffset: Math.round(this.addOffset(this.data.ytd_run_totals.distance / 1000))
         };
     },
     /**
@@ -298,7 +298,7 @@ Module.register("MMM-Strava", {
      *
      */
     addOffset: function(distance) {
-      this.log("Correcting Offset!");
+      //this.log("Correcting Offset!");
 /*      const meters = document.querySelectorAll('svg[data-value] .meter');
       this.log(meters);
       meters.forEach( (path) => {
@@ -323,10 +323,10 @@ Module.register("MMM-Strava", {
       });
 */
       var value = (distance / this.config.runningGoal);
-      this.log("Data value: " + value);
+      //this.log("Data value: " + value);
       // Calculate the percentage of the total length
       var to = Math.round( 510 * (1 - value));
-      this.log("New offset: "+to);
+      //this.log("New offset: "+to);
       // Set the Offset
       return(Math.max(0, to));
     }
