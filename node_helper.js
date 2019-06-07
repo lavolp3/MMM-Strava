@@ -54,6 +54,8 @@ module.exports = NodeHelper.create({
     configs: Object.create(null),
     // Tokens file path
     tokensFile: `${__dirname}/tokens.json`,
+	activitiesFile: `${__dirname}/activities.json`,
+	segmentsFile: `${__dirname}/segments.json`,
     // Token store e.g. this.tokens["client_id"])
     tokens: Object.create(null),
     /**
@@ -278,14 +280,74 @@ module.exports = NodeHelper.create({
         strava.athlete.listActivities({ "access_token": accessToken, "after": after, "per_page": 200 }, function (err, payload, limits) {
             var activityList = self.handleApiResponse(moduleIdentifier, err, payload, limits);
             if (activityList) {
-                var data = {
-                    "identifier": moduleIdentifier,
-                    "data": self.summariseActivities(moduleIdentifier, activityList)
-                };
-                self.sendSocketNotification("DATA", data);
+				if (this.configs[moduleIdentifier].showCrowns && moment.unix(after).format("YYYY") == "1990") {
+					var data = {
+						"identifier": moduleIdentifier,
+						"data": self.getSegmentCrowns(moduleIdentifier, activityList)
+					};
+					self.sendSocketNotification("DATA", data);
+				} else {
+					var data = {
+						"identifier": moduleIdentifier,
+						"data": self.summariseActivities(moduleIdentifier, activityList)
+					};
+					self.sendSocketNotification("DATA", data);
+				}
             }
         });
     },
+	
+	
+	getSegmentCrowns: function (moduleIdentifier, activityList) {
+		this.log("Getting Segment crowns for" + moduleIdentifier);
+		self = this;
+        var moduleConfig = this.configs[moduleIdentifier].config;
+		var activityID
+        var crownSummary = Object.create(null);
+        for (var activity in )
+		for (var activity in ["ride", "run"]) {
+            if (moduleConfig.activities.hasOwnProperty(activity)) {
+                activityName = moduleConfig.activities[activity].toLowerCase();
+           .....
+		   
+            }
+        }
+        // fill Segment List
+        var segmentList = [];
+		for (var i = 0; i < Object.keys(activityList).length; i++) {
+            // Merge virtual activities
+            activityName = activityList[i].type.toLowerCase().replace("virtual");
+			activityID = activityList[i].id;
+			strava.activities.get({ "access_token": accessToken, id: activityList[i], "include_all_efforts": true }, function (err, payload, limits) {
+				var activity = self.handleApiResponse(moduleIdentifier, err, payload, limits);
+				if (activity) {
+					for (var j = 0; j < Object.keys(activity.segmentEfforts).length; i++) {
+						var segment = activity.segmentEffort[j].segment.id; 
+						if (!segmentList.includes(segment)) {segmentList.push(segment)}
+					}
+				}
+			});
+		}
+		console.log("SegmentList: "+segmentList);
+		
+		var rankings = [0,0,0,0,0,0,0,0,0,0];
+		for (var i = 0; i < segmentList.length; i++) {
+            activityName = activityList[i].type.toLowerCase().replace("virtual");
+			activityID = activityList[i].id;
+			var rank;
+			strava.segments.listLeaderboard({ "access_token": accessToken, id: segmentList[i], "per_page": 10}, function (err, payload, limits) {
+				var segmentLeaderboard = self.handleApiResponse(moduleIdentifier, err, payload, limits);
+				if (segmentLeaderboard) {
+					for (var entry in segmentLeaderboard.entries) {
+						if (entry.athlete_name === "Dirk K.") {rank = entry.rank}
+					}
+				}
+				rankings[rank-1]++;
+			});
+		}
+		return rankings;
+	}
+	
     /**
      * @function handleApiResponse
      * @description handles the response from the API to catch errors and faults.
@@ -331,7 +393,6 @@ module.exports = NodeHelper.create({
         var moduleConfig = this.configs[moduleIdentifier].config;
         var activitySummary = Object.create(null);
         var activityName;
-        var segments = {};
         // Initialise activity summary
         var periodIntervals = moduleConfig.period === "ytd" ? moment.monthsShort() : moment.weekdaysShort();
         for (var activity in moduleConfig.activities) {
