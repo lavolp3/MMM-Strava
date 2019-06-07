@@ -291,29 +291,27 @@ module.exports = NodeHelper.create({
 						"identifier": moduleIdentifier,
 						"data": self.summariseActivities(moduleIdentifier, activityList)
 					};
-					self.sendSocketNotification("DATA", data);
+					self.sendSocketNotification("SEGMENT_DATA", data);
 				}
             }
         });
     },
-	
-	
+
+
 	getSegmentCrowns: function (moduleIdentifier, activityList) {
 		this.log("Getting Segment crowns for" + moduleIdentifier);
 		self = this;
-        var moduleConfig = this.configs[moduleIdentifier].config;
-		var activityID
-        var crownSummary = Object.create(null);
-        for (var activity in )
-		for (var activity in ["ride", "run"]) {
-            if (moduleConfig.activities.hasOwnProperty(activity)) {
-                activityName = moduleConfig.activities[activity].toLowerCase();
+    var moduleConfig = this.configs[moduleIdentifier].config;
+		var activityID;
+    /*for (var activity in ["ride", "run"]) {
+      if (moduleConfig.activities.hasOwnProperty(activity)) {
+        activityName = moduleConfig.activities[activity].toLowerCase();
            .....
-		   
-            }
+
         }
-        // fill Segment List
-        var segmentList = [];
+      }*/
+      // fill Segment List
+    var segmentList = [];
 		for (var i = 0; i < Object.keys(activityList).length; i++) {
             // Merge virtual activities
             activityName = activityList[i].type.toLowerCase().replace("virtual");
@@ -322,20 +320,20 @@ module.exports = NodeHelper.create({
 				var activity = self.handleApiResponse(moduleIdentifier, err, payload, limits);
 				if (activity) {
 					for (var j = 0; j < Object.keys(activity.segmentEfforts).length; i++) {
-						var segment = activity.segmentEffort[j].segment.id; 
+						var segment = activity.segmentEffort[j].segment.id;
 						if (!segmentList.includes(segment)) {segmentList.push(segment)}
 					}
 				}
 			});
 		}
 		console.log("SegmentList: "+segmentList);
-		
+
 		var rankings = [0,0,0,0,0,0,0,0,0,0];
-		for (var i = 0; i < segmentList.length; i++) {
-            activityName = activityList[i].type.toLowerCase().replace("virtual");
-			activityID = activityList[i].id;
+		for (var k = 0; k < segmentList.length; i++) {
+      activityName = activityList[k].type.toLowerCase().replace("virtual");
+			activityID = activityList[k].id;
 			var rank;
-			strava.segments.listLeaderboard({ "access_token": accessToken, id: segmentList[i], "per_page": 10}, function (err, payload, limits) {
+			strava.segments.listLeaderboard({ "access_token": accessToken, id: segmentList[k], "per_page": 10}, function (err, payload, limits) {
 				var segmentLeaderboard = self.handleApiResponse(moduleIdentifier, err, payload, limits);
 				if (segmentLeaderboard) {
 					for (var entry in segmentLeaderboard.entries) {
@@ -347,7 +345,7 @@ module.exports = NodeHelper.create({
 		}
 		return rankings;
 	}
-	
+
     /**
      * @function handleApiResponse
      * @description handles the response from the API to catch errors and faults.
