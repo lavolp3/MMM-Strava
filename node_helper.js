@@ -216,6 +216,7 @@ module.exports = NodeHelper.create({
             return;
         });
     },
+
     /**
      * @function getData
      * @description gets data from the Strava API based on module mode
@@ -248,6 +249,7 @@ module.exports = NodeHelper.create({
             this.log(`Access token not found for ${moduleIdentifier}`);
         }
     },
+
     /**
      * @function getAthleteStats
      * @description get stats for an athlete from the API
@@ -266,6 +268,7 @@ module.exports = NodeHelper.create({
             }
         });
     },
+
     /**
      * @function getAthleteActivities
      * @description get logged in athletes activities from the API
@@ -479,8 +482,8 @@ module.exports = NodeHelper.create({
      * @param  {string} msg            the message to be logged
      */
     log: function (msg) {
-        if (this.config && this.config.debug) {
+//        if (this.config && this.config.debug) {
           console.log(this.name + ":", JSON.stringify(msg));
-        }
+//        }
     }
 });

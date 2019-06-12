@@ -57,7 +57,7 @@ Module.register("MMM-Strava", {
         locale: config.language,
         units: config.units,
         reloadInterval: 5 * 60 * 1000,                  // every 5 minutes
-        updateInterval: 10 * 1000,                      // 10 seconds
+        updateInterval: 60 * 60 * 1000,                 // 1 hour
         animationSpeed: 2.5 * 1000,                     // 2.5 seconds
         runningGoal: 750,
         debug: true,                                    // Set to true to enable extending logging
