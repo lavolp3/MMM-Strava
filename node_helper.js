@@ -283,71 +283,80 @@ module.exports = NodeHelper.create({
         strava.athlete.listActivities({ "access_token": accessToken, "after": after, "per_page": 200 }, function (err, payload, limits) {
             var activityList = self.handleApiResponse(moduleIdentifier, err, payload, limits);
             if (activityList) {
-				if (this.configs[moduleIdentifier].showCrowns && moment.unix(after).format("YYYY") == "1990") {
+				if (self.configs[moduleIdentifier].showCrowns && moment.unix(after).format("YYYY") == "1990") {
 					var data = {
 						"identifier": moduleIdentifier,
-						"data": self.getSegmentCrowns(moduleIdentifier, activityList)
+						"data": self.getSegments(moduleIdentifier, activityList)
 					};
 					self.sendSocketNotification("DATA", data);
 				} else {
 					var data = {
 						"identifier": moduleIdentifier,
-						"data": self.summariseActivities(moduleIdentifier, activityList)
+						"data": self.summariseActivities(moduleIdentifier, activityList),
+            "segments": self.getSegments(moduleIdentifier, accessToken, activityList)
 					};
-					self.sendSocketNotification("SEGMENT_DATA", data);
+					self.sendSocketNotification("DATA", data);
 				}
             }
         });
     },
 
 
-	getSegmentCrowns: function (moduleIdentifier, activityList) {
-		this.log("Getting Segment crowns for" + moduleIdentifier);
-		self = this;
-    var moduleConfig = this.configs[moduleIdentifier].config;
-		var activityID;
-    /*for (var activity in ["ride", "run"]) {
-      if (moduleConfig.activities.hasOwnProperty(activity)) {
-        activityName = moduleConfig.activities[activity].toLowerCase();
-           .....
-
+    getSegments: function (moduleIdentifier, accessToken, activityList) {
+        this.log("Getting completed Segments for" + moduleIdentifier);
+        var self = this;
+        var moduleConfig = this.configs[moduleIdentifier].config;
+        var activityIDs = [];
+        // fill Segment List
+        var segmentList = [];
+        for (var i = 0; i < Object.keys(activityList).length; i++) {
+          activityIDs.push(activityList[i].id);
         }
-      }*/
-      // fill Segment List
-    var segmentList = [];
-		for (var i = 0; i < Object.keys(activityList).length; i++) {
-            // Merge virtual activities
-            activityName = activityList[i].type.toLowerCase().replace("virtual");
-			activityID = activityList[i].id;
-			strava.activities.get({ "access_token": accessToken, id: activityList[i], "include_all_efforts": true }, function (err, payload, limits) {
-				var activity = self.handleApiResponse(moduleIdentifier, err, payload, limits);
-				if (activity) {
-					for (var j = 0; j < Object.keys(activity.segmentEfforts).length; i++) {
-						var segment = activity.segmentEffort[j].segment.id;
-						if (!segmentList.includes(segment)) {segmentList.push(segment)}
-					}
-				}
-			});
-		}
-		console.log("SegmentList: "+segmentList);
+        console.log("ActivityIDs: "+activityIDs);
+        Promise.all(activityIDs.map(id =>
+          strava.activities.get({ "access_token": accessToken, id: id, "include_all_efforts": true }, function (err, payload, limits) {
+              var activity = self.handleApiResponse(moduleIdentifier, err, payload, limits);
+              console.log("Checking Activity: "+id);
+              if ((activity) && (activity.segment_efforts !== "[]")) {
+                  for (var j = 0; j < Object.keys(activity.segment_efforts).length; i++) {
+                      var segment = activity.segment_efforts[0].segment.id;
+                      if (!segmentList.includes(segment)) {segmentList.push(segment);}
+                  }
+                  console.log("SegmentList: "+segmentList);
+              } else {
+                console.log("Activity "+id+": No segments found!");
+              }
+          }))
+        ).then(console.log("Final SegmentList: "+segmentList));
+        //this.sendSocketNotification("SEG_LIST", segmentList);
+    },
 
-		var rankings = [0,0,0,0,0,0,0,0,0,0];
-		for (var k = 0; k < segmentList.length; i++) {
-      activityName = activityList[k].type.toLowerCase().replace("virtual");
-			activityID = activityList[k].id;
-			var rank;
-			strava.segments.listLeaderboard({ "access_token": accessToken, id: segmentList[k], "per_page": 10}, function (err, payload, limits) {
-				var segmentLeaderboard = self.handleApiResponse(moduleIdentifier, err, payload, limits);
-				if (segmentLeaderboard) {
-					for (var entry in segmentLeaderboard.entries) {
-						if (entry.athlete_name === "Dirk K.") {rank = entry.rank}
-					}
-				}
-				rankings[rank-1]++;
-			});
-		}
-		return rankings;
-	}
+    getCrowns: function (moduleIdentifier, segmentList) {
+        var rankings = {
+            "run": [0,0,0,0,0,0,0,0,0,0],
+            "ride": [0,0,0,0,0,0,0,0,0,0]
+        };
+        var self = this;
+        for (var i = 0; i < segmentList.length; i++) {
+            strava.segments.listLeaderboard({ "access_token": accessToken, id: segmentList[i], "per_page": 10, "page":1}, function (err, payload, limits) {
+                var rank;
+                var segmentLeaderboard = self.handleApiResponse(moduleIdentifier, err, payload, limits);
+                self.log("Leaderboard: "+JSON.stringify(segmentLeaderboard));
+                if (segmentLeaderboard) {
+                    for (var entry in segmentLeaderboard.entries) {
+                        if (entry.athlete_name === "Dirk K.") {rank = entry.rank;}
+                    }
+                    if (segmentLeaderboard.kom_type === "cr") {
+                        rankings.run[rank-1] = rankings.run[rank-1] + 1;
+                    } else {
+                        rankings.ride[rank-1] = rankings.ride[rank-1] + 1;
+                    }
+                }
+             });
+        }
+        console.log("Rankings:" + JSON.stringify(rankings));
+        this.sendSocketNotification("CROWNS", rankings);
+    },
 
     /**
      * @function handleApiResponse
@@ -404,7 +413,6 @@ module.exports = NodeHelper.create({
                     total_elevation_gain: 0,
                     total_moving_time: 0,
                     max_interval_distance: 0,
-                    activityIDs: [],
                     intervals: Array(periodIntervals.length).fill(0)
                 };
             }
@@ -418,7 +426,6 @@ module.exports = NodeHelper.create({
             if (activityTypeSummary) {
                 var distance = activityList[i].distance;
                 activityTypeSummary.total_distance += distance;
-                activityTypeSummary.activityIDs[i] = (activityList[i].id);
                 activityTypeSummary.total_elevation_gain += activityList[i].total_elevation_gain;
                 activityTypeSummary.total_moving_time += activityList[i].moving_time;
                 const activityDate = moment(activityList[i].start_date_local);
@@ -430,6 +437,7 @@ module.exports = NodeHelper.create({
                 }
             }
         }
+        this.log("Summary: "+JSON.stringify(activitySummary));
         return activitySummary;
     },
     /**
