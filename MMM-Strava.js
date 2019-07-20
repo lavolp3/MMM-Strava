@@ -56,7 +56,7 @@ Module.register("MMM-Strava", {
         auto_rotate: false,                             // Rotate stats through each period starting from specified period
         locale: config.language,
         units: config.units,
-        reloadInterval: 5 * 60 * 1000,                  // every 5 minutes
+        reloadInterval: 20 * 60 * 1000,                  // every 5 minutes
         updateInterval: 60 * 60 * 1000,                 // 1 hour
         animationSpeed: 2.5 * 1000,                     // 2.5 seconds
         runningGoal: 750,
