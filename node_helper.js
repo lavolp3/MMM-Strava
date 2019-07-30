@@ -54,8 +54,11 @@ module.exports = NodeHelper.create({
     configs: Object.create(null),
     // Tokens file path
     tokensFile: `${__dirname}/tokens.json`,
-	  activitiesFile: `${__dirname}/cache/activities.json`,
-	  segmentsFile: `${__dirname}/cache/segments.json`,
+    activitiesFile: `${__dirname}/cache/activities.json`,
+    segmentsFile: `${__dirname}/cache/segments.json`,
+    activityList: [],
+    segmentList: [],
+
     // Token store e.g. this.tokens["client_id"])
     tokens: Object.create(null),
     /**
@@ -69,7 +72,7 @@ module.exports = NodeHelper.create({
     socketNotificationReceived: function (notification, payload) {
         var self = this;
         this.log("Received notification: " + notification);
-        if (notification === "SET_CONFIG") {
+        if (notification === "GET_STRAVA_DATA") {
             // Validate module config
             if (payload.config.access_token || payload.config.strava_id) {
                 this.log(`Legacy config in use for ${payload.identifier}`);
@@ -207,7 +210,7 @@ module.exports = NodeHelper.create({
                 // Store tokens
                 self.saveToken(args.client_id, token, (err, data) => {
                     if (!err) {
-                        self.getData(moduleIdentifier);
+                        //self.getData(moduleIdentifier);
                     }
                 });
             } else {
@@ -243,7 +246,7 @@ module.exports = NodeHelper.create({
                 moment.locale(moduleConfig.locale);
                 var after = moment().startOf(moduleConfig.period === "ytd" ? "year" : "week").unix();
                 // Call api
-                this.getAthleteActivities(moduleIdentifier, accessToken, after);
+                this.getAthleteActivities(moduleIdentifier, accessToken, 1);
             }
         } catch (error) {
             this.log(`Access token not found for ${moduleIdentifier}`);
@@ -277,42 +280,71 @@ module.exports = NodeHelper.create({
      * @param {string} accessToken
      * @param {string} after
      */
-    getAthleteActivities: function (moduleIdentifier, accessToken, after) {
-        this.log("Getting athlete activities for " + moduleIdentifier + " after " + moment.unix(after).format("YYYY-MM-DD"));
+    getAthleteActivities: function (moduleIdentifier, accessToken, page) {
+        this.log("Getting athlete activities for " + moduleIdentifier);
         var self = this;
-        strava.athlete.listActivities({ "access_token": accessToken, "after": 1562021741, "per_page": 200 }, function (err, payload, limits) {
-            var activityList = self.handleApiResponse(moduleIdentifier, err, payload, limits);
-            if (activityList) {
 
-                //old procedure
-                var data = {
+        var activityIDs = [];
+        /*if (page == "1") {
+            try {
+                const activityData = fs.readFileSync(this.activitiesFile, "utf8");
+                this.activityList = JSON.parse(activityData);
+                for (var i = 1; i < Object.keys(this.activityList).length; i++) {
+                  activityIDs.push(this.activityList[i].id);
+                }
+                console.log("Successfully loaded activities list from file!");
+                console.log("ActivityIDs: "+JSON.stringify(activityIDs));
+            } catch (error) {
+                console.log("An error occured while trying to load cached activities: "+error);
+                activityIDs = [];
+                this.activityList = [];
+            }
+        }*/
+        //console.log(moment(this.activityList[0].start_date_local).format("X"));
+        after = (this.activityList.length > 0) ? (moment(this.activityList[this.activityList.length-1].start_date_local).format("X")) : "946684800";
+        console.log("Fetching activities after "+moment.unix(after).format("YYYY-MM-DD"));
+        console.log(after, page);
+
+        strava.athlete.listActivities({ "access_token": accessToken, "after": after, "per_page": 200, "page": page }, function (err, payload, limits) {
+            var activities = self.handleApiResponse(moduleIdentifier, err, payload, limits);
+            if (activities) {
+                console.log(activities.length + " Activities found");
+                self.activityList = /*activities.concat(self.activityList)*/self.activityList.concat(activities);
+                //self.activityList.sort(function (a, b) { return moment(b.start_date).clone.format("x") - moment(a.start_date).clone.format("x");});
+                if (activities.length == 200) {
+                  console.log("More to come...");
+                  page++;
+                  self.getAthleteActivities(moduleIdentifier, accessToken, page);
+                } else {
+                  console.log("Fetched " + self.activityList.length + " Activities!");
+                  fs.writeFile(self.activitiesFile, JSON.stringify(self.activityList), (err) => {
+                    if (err) throw err;
+                    console.log("Activities file has been saved!");
+                  });
+                  //self.getSegments(moduleIdentifier, accessToken);
+                }
+
+                //old module
+                /*var data = {
                     "identifier": moduleIdentifier,
                     "data": self.summariseActivities(moduleIdentifier, activityList),
                 };
-                self.sendSocketNotification("DATA", data);
+                self.sendSocketNotification("DATA", data);*/
 
-                //New procedure
-                self.getSegments(moduleIdentifier, accessToken, activityList);
             }
         });
     },
 
 
-    getSegments: function (moduleIdentifier, accessToken, activityList) {
+    getSegments: function (moduleIdentifier, accessToken) {
         this.log("Getting completed Segments for" + moduleIdentifier);
         var self = this;
         var moduleConfig = this.configs[moduleIdentifier].config;
-        var activityIDs = [];
-
-
-        for (var i = 0; i < Object.keys(activityList).length; i++) {
-          activityIDs.push(activityList[i].id);
-        }
-        //console.log("ActivityIDs: "+activityIDs);
 
         // fill Segment List
         var segIDs = [];
         var segList = [];
+        var apiCalls = [];
         if (this.segmentsFile) {
             try {
                 const segmentData = fs.readFileSync(this.segmentsFile, "utf8");
@@ -321,24 +353,37 @@ module.exports = NodeHelper.create({
                   segIDs.push(segList[i].id);
                 }
                 console.log("Successfully loaded Segment List!");
-                console.log("SegList: "+JSON.stringify(segList));
+                //console.log("SegList: "+JSON.stringify(segList));
                 console.log("SegIDs: "+JSON.stringify(segIDs));
             } catch (error) {
                 segList = [];
             }
         }
 
-        Promise.all(activityIDs.map(id =>
-          new Promise((resolve, reject) => {
-            strava.activities.get({ "access_token": accessToken, id: id, "include_all_efforts": true }, function (err, payload, limits) {
-              console.log("Checking Activity: "+id);
+        console.log(this.activityList.length);
+        for (var i = 0; i < 200/*this.activityList.length*/; i++) {
+          if (!this.activityList[i].segmentsChecked) {
+          apiCalls.push(new Promise((resolve, reject) => {
+            strava.activities.get({ "access_token": accessToken, id: self.activityList[i].id, "include_all_efforts": true }, function (err, payload, limits) {
+            /*
+            output:
+            {
+               shortTermUsage: 3,
+               shortTermLimit: 600,
+               longTermUsage: 12,
+               longTermLimit: 30000
+            }
+            */
               if (err) {
                 reject("Error!" +err);
+              } else if (limits.shortTermUsage >= 600 ||  limits.longTermUsage >= 30000) {
+                  console.log("API LIMIT EXCEEDED");
               } else {
+                console.log("Checking Activity: " + self.activityList[i].id);
                 var activity = self.handleApiResponse(moduleIdentifier, err, payload, limits);
                 if ((activity) && (activity.segment_efforts.length)) {
                   console.log(activity.segment_efforts.length + " Segments found!");
-                  for (let j = 0; j < activity.segment_efforts.length; j++) {
+                  for (var j = 0; j < activity.segment_efforts.length; j++) {
                     var currentID = activity.segment_efforts[j].segment.id;
                     if (!segIDs.includes(currentID)) {
                       segIDs.push(currentID);
@@ -352,16 +397,21 @@ module.exports = NodeHelper.create({
                     }
                   }
                 } else {
-                  console.log("Activity "+id+": No segments found!");
+                  console.log("Activity "+self.activityList[i].id+": No segments found!");
                 }
+                self.activityList[i].segmentsChecked = true;
                 resolve(/*segList*/);
               }
             });
-          })
-        )).then( function () {
-            //console.log("SegList: "+JSON.stringify(segList));
-            self.getCrowns(moduleIdentifier, accessToken, segIDs, segList);
-        }).catch(error => console.log("Something went wrong: " +error));
+          }));
+        }}
+
+        Promise.all(apiCalls)
+        .then( function () {
+            console.log("SegList: "+JSON.stringify(segList));
+            //self.getCrowns(moduleIdentifier, accessToken, segIDs, segList);
+        })
+        .catch( error => console.log("Something went wrong: " +error ));
     },
 
     getCrowns: function (moduleIdentifier, accessToken, segIDs, segList) {

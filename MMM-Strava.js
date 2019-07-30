@@ -56,7 +56,7 @@ Module.register("MMM-Strava", {
         auto_rotate: false,                             // Rotate stats through each period starting from specified period
         locale: config.language,
         units: config.units,
-        reloadInterval: 20 * 60 * 1000,                  // every 5 minutes
+        reloadInterval: 16 * 60 * 1000,                  // every 5 minutes
         updateInterval: 60 * 60 * 1000,                 // 1 hour
         animationSpeed: 2.5 * 1000,                     // 2.5 seconds
         runningGoal: 750,
@@ -119,8 +119,9 @@ Module.register("MMM-Strava", {
         // Add custom filters
         this.addFilters();
         // Initialise helper and schedule api calls
-        this.sendSocketNotification("SET_CONFIG", {"identifier": this.identifier, "config": this.config});
-        this.scheduleUpdates();
+        console.log("Sending Socket notification SET-CONFIG");
+        this.sendSocketNotification("GET_STRAVA_DATA", {"identifier": this.identifier, "config": this.config});
+        //this.scheduleUpdates();
     },
     /**
      * @function socketNotificationReceived
@@ -135,7 +136,7 @@ Module.register("MMM-Strava", {
         if (payload.identifier === this.identifier) {
             if (notification === "DATA") {
                 this.data = payload.data;
-                this.log("Strava data: "+JSON.stringify(this.data));
+                //this.log("Strava data: "+JSON.stringify(this.data));
                 this.loading = false;
                 this.updateDom(this.config.animationSpeed);
             } else if (notification === "ERROR") {
