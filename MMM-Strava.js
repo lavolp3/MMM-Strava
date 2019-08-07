@@ -239,44 +239,19 @@ Module.register("MMM-Strava", {
         var intervalDate = moment().startOf(startUnit).add(interval, intervalUnit);
         return intervalDate.format(labelUnit).slice(0,1).toUpperCase();
     },
-
-    /**
-     * @function getPace
-     * @description calculates and returns pace for display in nunjuck template.
-     * @param  {string} acivity            the activity (period is not important here)
-     * @param  {string} distance           the distance for the activity and period
-     * @param  {string} moving_time        the moving time for the activity and period
-
-     * @returns {string} pace
-     */
-    getPace: function(activity, distance, moving_time) {
+    
+    
+    getPace: function(activity, period) {
         moment.locale(this.config.locale);
-        var pace = 0;
-        if (distance > 0)
-        {
-          switch (activity) {
+        switch (activity) {
             case "run":
-              distance = (this.config.units == "metric") ? (distance / 1000) : (distance / 1609.34);
-              //moment.js "hack" to convert pace into m:ss. The number of seconds is added to start of the day (0:00) and the new "time" is converted to m:ss
-              pace = moment().startOf("day").seconds(Math.round(moving_time / distance)).format("m:ss");
-              break;
+                break;
             case "swim":
-              distance = (this.config.units == "metric") ? (distance) : (distance / 1.60934);
-              pace = (distance / moving_time * 3.6).toFixed(2);
-              break;
+                break;
             case "ride":
-              distance = (this.config.units == "metric") ? (distance / 100) : (distance / 100 * 0.9144);
-              pace = moment().startOf("day").seconds(Math.round(moving_time / distance)).format("m:ss");
-              break;
-            default:
-              pace = 0;
-          }
-        } else {
-          pace = 0;
+                break;
         }
-        return pace;
     },
-
 
     formatTime: function(timeInSeconds) {
         var duration = moment.duration(timeInSeconds, "seconds");
