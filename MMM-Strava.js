@@ -49,7 +49,7 @@ Module.register("MMM-Strava", {
     defaults: {
         client_id: "",
         client_secret: "",
-        mode: "chart",                                  // Possible values "table", "chart", "progressbar"
+        mode: "table",                                  // Possible values "table", "chart", "progressbar"
         activities: ["ride", "run", "swim"],            // Possible values "ride", "run", "swim"
         period: "recent",                               // Possible values "recent", "ytd", "all"
         stats: ["count", "distance", "pace", "achievements"],   // Possible values "count", "distance", "pace", "elevation", "moving_time", "elapsed_time", "achievements"
@@ -57,7 +57,7 @@ Module.register("MMM-Strava", {
         locale: config.language,
         units: config.units,
         reloadInterval: 5 * 60 * 1000,                  // every 5 minutes
-        updateInterval: 20 * 1000,                      // 10 seconds
+        updateInterval: 30 * 1000,                      // 10 seconds
         animationSpeed: 0 * 1000,                     // 2.5 seconds
         showProgressBar: true,
         shownPB: "ride",                                //will revolve between all progressbars with a goal
@@ -239,8 +239,8 @@ Module.register("MMM-Strava", {
         var intervalDate = moment().startOf(startUnit).add(interval, intervalUnit);
         return intervalDate.format(labelUnit).slice(0,1).toUpperCase();
     },
-    
-    
+
+
     getPace: function(activity, period) {
         moment.locale(this.config.locale);
         switch (activity) {
@@ -314,6 +314,7 @@ Module.register("MMM-Strava", {
         "toMeasure": Math.max(0, toMeasure),
         "offset": Math.max(0, toRes),
         "deviation": deviation,
+        "color": (deviation < 0) ? "red" : "green",
         "threshold": Math.round(-510 * partOfYear),
         "distance": distance,
       });

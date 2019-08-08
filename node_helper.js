@@ -266,21 +266,18 @@ module.exports = NodeHelper.create({
                       distance = (moduleConfig.units == "metric") ? (data[value].distance / 1000) : (data[value].distance / 1609.34);
                       //moment.js "hack" to convert pace into m:ss. The number of seconds is added to start of the day (0:00) and the new "time is converted"
                       data[value].pace = moment().startOf("day").seconds(Math.round(data[value].moving_time / distance)).format("m:ss");
-                      console.log(data);
                     } else if (JSON.stringify(value).includes("ride")) {
                       distance = (moduleConfig.units == "metric") ? (data[value].distance) : (data[value].distance / 1.60934);
                       data[value].pace = (distance / data[value].moving_time * 3.6).toFixed(2);
-                      console.log(data);
                     } else {
                       distance = (moduleConfig.units == "metric") ? (data[value].distance / 100) : (data[value].distance / 100 * 0.9144);
                       data[value].pace = moment().startOf("day").seconds(Math.round(data[value].moving_time / distance)).format("m:ss");
-                      console.log(data);
                     }
                   } else {
                     data[value].pace = 0;
                   }
                 }
-
+                self.log("Athlete Stats: "+JSON.stringify(data));
                 self.sendSocketNotification("STATS", { "identifier": moduleIdentifier, "stats": data });
             }
         });
