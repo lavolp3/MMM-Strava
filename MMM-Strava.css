@@ -39,17 +39,22 @@
 }
 
 
-.MMM-Strava .strava-icon.icon-lg {
+.MMM-Strava .strava-icon .icon-lg {
   height: 48px;
   width: 48px;
   margin: 10px;
   float: right;
 }
 
+.MMM-Strava table .title {
+  display: none;
+}
+
 .MMM-Strava .strava-icon {
-  /*height: 24px;
-  width: 24px;*/
+  height: 35px;
+  width: 35px;
   background-size: cover;
+  background-position: 0px 0px;
   vertical-align: right;
   box-sizing: border-box;
   background-repeat: no-repeat;
