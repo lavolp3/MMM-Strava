@@ -10,7 +10,7 @@
     <table class="small">
         <thead>
             <tr class="normal">
-                <td></td>
+                <td class="title"></td>
                 <td></td>
                 {% if 'count' in config.stats %}
                 <td class="light symbol align-right stat"><span class="fa fa-hashtag" title="Activity count"></span></td>
@@ -42,7 +42,7 @@
             <tr class="normal">
                 <td class="title light">{{activity | upper | translate }}</td>
                 <td class="bright symbol">
-                    <div class="strava-icon icon-{{activity | lower }}"></div>
+                    <div class="strava-icon icon-{{activity | lower }} icon-table"></div>
                 </td>
                 {% if 'count' in config.stats %}
                 <td class="bright align-right stat">{{activity_stats.count}}</td>
@@ -60,10 +60,10 @@
                 <td class="bright align-right stat">{{activity_stats.elapsed_time | formatTime }}</td>
                 {% endif %}
                 {% if 'pace' in config.stats %}
-                <td class="bright align-right stat">{{activity_data.pace}}</td>
+                <td class="bright align-right stat">{{activity_stats.pace}}</td>
                 {% endif %}
                 {% if ('achievements' in config.stats) and (config.period === "recent") %}
-                <td class="bright align-right stat">{{activity_data.achievement_count}}</td>
+                <td class="bright align-right stat">{{activity_stats.achievement_count}}</td>
                 {% endif %}
             </tr>
 {% endfor %}
