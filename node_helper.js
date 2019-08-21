@@ -285,32 +285,41 @@ module.exports = NodeHelper.create({
         var self = this;
 
         var activityIDs = [];
-        /*if (page == "1") {
-            try {
-                const activityData = fs.readFileSync(this.activitiesFile, "utf8");
-                this.activityList = JSON.parse(activityData);
-                for (var i = 1; i < Object.keys(this.activityList).length; i++) {
-                  activityIDs.push(this.activityList[i].id);
+        if (page == "1") {
+            if (!fs.existsSync(this.activitiesFile)) {
+              self.log("Activities file not found! Will create a new one.");
+              activityIDs = [];
+              this.activityList = [];
+            } else {
+                try {
+                    const activityData = fs.readFileSync(this.activitiesFile, "utf8");
+                    this.activityList = JSON.parse(activityData);
+                    for (var i = 1; i < Object.keys(this.activityList).length; i++) {
+                      activityIDs.push(this.activityList[i].id);
+                    }
+                    self.log("Successfully loaded " + this.activityList.length + " activities from file!");
+                    self.log("ActivityIDs: "+JSON.stringify(activityIDs));
+                } catch (fe) {
+                    console.log("An error occured while trying to load cached activities: "+fe);
+                    activityIDs = [];
+                    this.activityList = [];
                 }
-                console.log("Successfully loaded activities list from file!");
-                console.log("ActivityIDs: "+JSON.stringify(activityIDs));
-            } catch (error) {
-                console.log("An error occured while trying to load cached activities: "+error);
-                activityIDs = [];
-                this.activityList = [];
             }
-        }*/
+        }
         //console.log(moment(this.activityList[0].start_date_local).format("X"));
-        after = (this.activityList.length > 0) ? (moment(this.activityList[this.activityList.length-1].start_date_local).format("X")) : "946684800";
-        console.log("Fetching activities after "+moment.unix(after).format("YYYY-MM-DD"));
-        console.log(after, page);
+        var after = (this.activityList[0].start_date_local) ? (moment(this.activityList[0].start_date_local).add(1, "minutes").format("X")) : "946684800";
+        console.log("Fetching activities after "+moment.unix(after).format("YYYY-MM-DD")+", Page "+page);
+        //console.log(after, page);
 
         strava.athlete.listActivities({ "access_token": accessToken, "after": after, "per_page": 200, "page": page }, function (err, payload, limits) {
             var activities = self.handleApiResponse(moduleIdentifier, err, payload, limits);
             if (activities) {
                 console.log(activities.length + " Activities found");
                 self.activityList = /*activities.concat(self.activityList)*/self.activityList.concat(activities);
-                //self.activityList.sort(function (a, b) { return moment(b.start_date).clone.format("x") - moment(a.start_date).clone.format("x");});
+                self.activityList.sort(function (a, b) { return moment(b.start_date).clone().format("x") - moment(a.start_date).clone().format("x");});
+                /*for (i=0; i < self.activityList.length; i++) {
+                  console.log(self.activityList[i].start_date);
+                }*/
                 if (activities.length == 200) {
                   console.log("More to come...");
                   page++;
@@ -321,7 +330,7 @@ module.exports = NodeHelper.create({
                     if (err) throw err;
                     console.log("Activities file has been saved!");
                   });
-                  //self.getSegments(moduleIdentifier, accessToken);
+                  self.getSegments(moduleIdentifier, accessToken);
                 }
 
                 //old module
@@ -345,7 +354,10 @@ module.exports = NodeHelper.create({
         var segIDs = [];
         var segList = [];
         var apiCalls = [];
-        if (this.segmentsFile) {
+        if (!fs.existsSync(this.segmentsFile)) {
+            console.log("Segments file not found! Will create a new one.");
+            segList = [];
+        } else {
             try {
                 const segmentData = fs.readFileSync(this.segmentsFile, "utf8");
                 segList = JSON.parse(segmentData);
@@ -361,7 +373,7 @@ module.exports = NodeHelper.create({
         }
 
         console.log(this.activityList.length);
-        for (var i = 0; i < 200/*this.activityList.length*/; i++) {
+        for (var i = 0; i < 10/*this.activityList.length*/; i++) {
           if (!this.activityList[i].segmentsChecked) {
           apiCalls.push(new Promise((resolve, reject) => {
             strava.activities.get({ "access_token": accessToken, id: self.activityList[i].id, "include_all_efforts": true }, function (err, payload, limits) {
@@ -391,7 +403,10 @@ module.exports = NodeHelper.create({
                           {
                           "id": currentID,
                           "type": activity.segment_efforts[j].segment.activity_type,
-                          "name": activity.segment_efforts[j].segment.name
+                          "name": activity.segment_efforts[j].segment.name,
+                          "time": activity.segment_efforts[j].elapsed_time,
+                          "distance": activity.segment_efforts[j].distance,
+                          "city": activity.segment_efforts[j].segment.city
                           }
                       );
                     }
