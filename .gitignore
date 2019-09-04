@@ -39,5 +39,5 @@ jspm_packages
 # Token store
 tokens.json
 
-#cache json
-cache/
+# Cache
+cache

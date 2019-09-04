@@ -54,8 +54,16 @@ module.exports = NodeHelper.create({
     configs: Object.create(null),
     // Tokens file path
     tokensFile: `${__dirname}/tokens.json`,
+    activitiesFile: `${__dirname}/cache/activities.json`,
+    segmentsFile: `${__dirname}/cache/segments.json`,
+    activityList: [],
+    segmentList: [],
+    crownCounter: 0,
+
     // Token store e.g. this.tokens["client_id"])
     tokens: Object.create(null),
+
+
     /**
      * @function socketNotificationReceived
      * @description receives socket notifications from the module.
@@ -66,7 +74,7 @@ module.exports = NodeHelper.create({
      */
     socketNotificationReceived: function (notification, payload) {
         var self = this;
-        this.log("Received notification: " + notification + " at " +moment().format("H:mm:ss"));
+        this.log("Received notification: " + notification);
         if (notification === "GET_STRAVA_DATA") {
             // Validate module config
             if (payload.config.access_token || payload.config.strava_id) {
@@ -90,6 +98,7 @@ module.exports = NodeHelper.create({
             }, payload.config.reloadInterval);
         }
     },
+
     /**
      * @function createRoutes
      * @description Creates the routes for the authorisation flow.
@@ -99,6 +108,7 @@ module.exports = NodeHelper.create({
         this.expressApp.get(`/${this.name}/auth/request`, this.authRequestRoute.bind(this));
         this.expressApp.get(`/${this.name}/auth/exchange`, this.authExchangeRoute.bind(this));
     },
+
     /**
      * @function authModulesRoute
      * @description returns a list of module identifiers
@@ -181,6 +191,7 @@ module.exports = NodeHelper.create({
             res.redirect(`/${this.name}/auth/?error=${JSON.stringify(error)}`);
         }
     },
+
     /**
      * @function refreshTokens
      * @description refresh the authenitcation tokens from the API and store
@@ -205,7 +216,7 @@ module.exports = NodeHelper.create({
                 // Store tokens
                 self.saveToken(args.client_id, token, (err, data) => {
                     if (!err) {
-                        self.getData(moduleIdentifier);
+                        //self.getData(moduleIdentifier);
                     }
                 });
             } else {
@@ -214,6 +225,7 @@ module.exports = NodeHelper.create({
             return;
         });
     },
+
     /**
      * @function getData
      * @description gets data from the Strava API based on module mode
@@ -221,12 +233,13 @@ module.exports = NodeHelper.create({
      * @param {string} moduleIdentifier - The module identifier.
      */
     getData: function (moduleIdentifier) {
-        this.log(`Getting data for ${moduleIdentifier} at ` +moment().format("H:mm:ss"));
+        this.log(`Getting data for ${moduleIdentifier} at` + moment().format("DD/MM HH:mm"));
         const moduleConfig = this.configs[moduleIdentifier].config;
+
         try {
             // Get access token
             const accessToken = moduleConfig.access_token || this.tokens[moduleConfig.client_id].token.access_token;
-
+           
                 try {
                     // Get athelete Id
                     const athleteId = moduleConfig.strava_id || this.tokens[moduleConfig.client_id].token.athlete.id;
@@ -245,6 +258,7 @@ module.exports = NodeHelper.create({
             this.log(`Access token not found for ${moduleIdentifier}`);
         }
     },
+
     /**
      * @function getAthleteStats
      * @description get stats for an athlete from the API
@@ -254,56 +268,258 @@ module.exports = NodeHelper.create({
      * @param {integer} athleteId
      */
     getAthleteStats: function (moduleIdentifier, accessToken, athleteId) {
-        this.log(`Getting athlete stats for ${moduleIdentifier} using id ` + athleteId);
+        this.log("Getting athlete stats for " + moduleIdentifier + " using " + athleteId);
         var self = this;
-        const moduleConfig = this.configs[moduleIdentifier].config;
         strava.athletes.stats({ "access_token": accessToken, "id": athleteId }, function (err, payload, limits) {
             var data = self.handleApiResponse(moduleIdentifier, err, payload, limits);
             if (data) {
-                for (var value in data) {
-                  if (data[value].distance > 0) {
-                    if (JSON.stringify(value).includes("run")) {
-                      distance = (moduleConfig.units == "metric") ? (data[value].distance / 1000) : (data[value].distance / 1609.34);
-                      //moment.js "hack" to convert pace into m:ss. The number of seconds is added to start of the day (0:00) and the new "time is converted"
-                      data[value].pace = moment().startOf("day").seconds(Math.round(data[value].moving_time / distance)).format("m:ss");
-                    } else if (JSON.stringify(value).includes("ride")) {
-                      distance = (moduleConfig.units == "metric") ? (data[value].distance) : (data[value].distance / 1.60934);
-                      data[value].pace = (distance / data[value].moving_time * 3.6).toFixed(2);
-                    } else {
-                      distance = (moduleConfig.units == "metric") ? (data[value].distance / 100) : (data[value].distance / 100 * 0.9144);
-                      data[value].pace = moment().startOf("day").seconds(Math.round(data[value].moving_time / distance)).format("m:ss");
-                    }
-                  } else {
-                    data[value].pace = 0;
-                  }
-                }
-                self.log("Athlete Stats: "+JSON.stringify(data));
-                self.sendSocketNotification("STATS", { "identifier": moduleIdentifier, "stats": data });
+                self.sendSocketNotification("DATA", { "identifier": moduleIdentifier, "data": data });
             }
         });
     },
+
     /**
      * @function getAthleteActivities
      * @description get logged in athletes activities from the API
      *
-     * @param {string} moduleIdentifier - The module identifier.
-     * @param {string} accessToken
-     * @param {string} after
      */
-    getAthleteActivities: function (moduleIdentifier, accessToken, after) {
-        this.log("Getting athlete activities for " + moduleIdentifier + " after " + moment.unix(after).format("YYYY-MM-DD"));
+    getAthleteActivities: function (moduleIdentifier, accessToken, page) {
+        this.log("Getting athlete activities for " + moduleIdentifier);
         var self = this;
-        strava.athlete.listActivities({ "access_token": accessToken, "after": after, "per_page": 200 }, function (err, payload, limits) {
-            var activityList = self.handleApiResponse(moduleIdentifier, err, payload, limits);
-            if (activityList) {
-                var data = {
+        var after = "946684800";
+        var activityIDs = [];
+
+        /*
+        *  Load activities from file if it already exists
+        */
+        if (page == "1") {
+            if (!fs.existsSync(this.activitiesFile)) {
+                self.log("Activities file not found! Will create a new one.");
+                this.activityList = [];
+            } else {
+                const activityData = fs.readFileSync(this.activitiesFile, "utf8");
+                this.activityList = JSON.parse(activityData);
+                for (var i = 1; i < Object.keys(this.activityList).length; i++) {
+                    activityIDs.push(this.activityList[i].id);
+                }
+                self.log("Successfully loaded " + this.activityList.length + " activities from file!");
+                after = moment(this.activityList[this.activityList.length - 1].start_date_local).add(1, "minutes").format("X");
+                //self.log("ActivityIDs: "+JSON.stringify(activityIDs));
+            }
+        }
+
+        this.log("Fetching activities after "+moment.unix(after).clone().format("YYYY-MM-DD")+", page "+page);
+        strava.athlete.listActivities({ "access_token": accessToken, "after": after, "per_page": 200, "page": page }, function (err, payload, limits) {
+            var activities = self.handleApiResponse(moduleIdentifier, err, payload, limits);
+            if (activities) {
+                console.log(activities.length + " Activities found");
+                self.activityList = /*activities.concat(self.activityList)*/self.activityList.concat(activities);
+                //self.activityList.sort(function (a, b) { return moment(a.start_date).clone().format("x") - moment(b.start_date).clone().format("x");});
+                if (activities.length == 200) {
+                  self.log("More to come...");
+                  page = page + 1;
+                  self.getAthleteActivities(moduleIdentifier, accessToken, page);
+                } else {
+                  console.log("Fetched " + self.activityList.length + " Activities!");
+                  for (i = 0; (i < self.activityList.length); i++) {
+                    delete self.activityList[i].map;
+                  }
+                  /*fs.writeFile(self.activitiesFile, JSON.stringify(self.activityList), (err) => {
+                    if (err) throw err;
+                    self.log("Activities file has been saved!");
+                  });*/
+                  self.getSegments(moduleIdentifier, accessToken);
+                }
+
+                //old module
+                /*var data = {
                     "identifier": moduleIdentifier,
-                    "activities": self.summariseActivities(moduleIdentifier, activityList)
+                    "data": self.summariseActivities(moduleIdentifier, activityList),
                 };
-                self.sendSocketNotification("ACTIVITIES", data);
+                self.sendSocketNotification("DATA", data);*/
+
             }
         });
     },
+
+
+    getSegments: function (moduleIdentifier, accessToken) {
+        this.log("Getting completed Segments for " + moduleIdentifier);
+        var self = this;
+        var moduleConfig = this.configs[moduleIdentifier].config;
+
+        // fill Segment List
+        var segIDs = [];
+        var apiCalls = [];
+        if (!fs.existsSync(this.segmentsFile)) {
+            console.log("Segments file not found! Will create a new one.");
+            self.segmentList = [];
+        } else {
+            //try {
+                const segmentData = fs.readFileSync(this.segmentsFile, "utf8");
+                self.segmentList = JSON.parse(segmentData);
+                for (var i = 0; i < Object.keys(self.segmentList).length; i++) {
+                  segIDs.push(self.segmentList[i].id);
+                }
+                self.log("Successfully loaded Segment List!");
+                //console.log("SegmentList: "+JSON.stringify(self.segmentList));
+                //self.log("SegIDs: "+JSON.stringify(segIDs));
+            /*} catch (error) {
+                console.log("An error occured while trying to load cached segments: "+error);
+                self.segmentList = [];
+            }*/
+        }
+
+        for (var i = 0; (i < this.activityList.length); i++) {
+          if (!this.activityList[i].segmentsChecked) {
+            apiCalls.push(new Promise((resolve, reject) => {
+              strava.activities.get({ "access_token": accessToken, id: self.activityList[i].id, "include_all_efforts": true }, function (err, payload, limits) {
+              /*
+              output:
+              {
+                 shortTermUsage: 3,
+                 shortTermLimit: 600,
+                 longTermUsage: 12,
+                 longTermLimit: 30000
+              }
+              */
+                if (err) {
+                  resolve("Error!");
+                } else if (limits.shortTermUsage >= 600 ||  limits.longTermUsage >= 30000) {
+                    console.log("API LIMIT EXCEEDED");
+                    resolve("LIMIT");
+                } else {
+                  //console.log("Checking Activity: " + id);
+                  var activity = self.handleApiResponse(moduleIdentifier, err, payload, limits);
+                  if ((activity) && (activity.segment_efforts.length)) {
+                    self.log("Activity "+activity.id+": "+activity.segment_efforts.length + " Segments found!");
+                    for (var j = 0; j < activity.segment_efforts.length; j++) {
+                      var currentID = activity.segment_efforts[j].segment.id;
+                      if (!segIDs.includes(currentID)) {
+                        segIDs.push(currentID);
+                        //console.log("Pushed Segment: "+currentID)
+                        self.segmentList.push(
+                            {
+                            "id": currentID,
+                            "type": activity.segment_efforts[j].segment.activity_type,
+                            "name": activity.segment_efforts[j].segment.name,
+                            "distance": activity.segment_efforts[j].distance,
+                            "city": activity.segment_efforts[j].segment.city
+                            }
+                        );
+                      }
+                    }
+                  } else {
+                    self.log("Activity "+activity.id+": No segments found!");
+                  }
+                  self.activityList.find(index => index.id == activity.id).segmentsChecked = true;
+                  resolve(activity.id);
+                }
+              });
+            }));
+          }
+        }
+
+        Promise.all(apiCalls)
+        .then( function () {
+            self.log(self.segmentList.length + " Segments");
+            fs.writeFile(self.activitiesFile, JSON.stringify(self.activityList), (err) => {
+                if (err) throw err;
+                self.log("Activities file has been saved!");
+            });
+            /*fs.writeFile(self.segmentsFile, JSON.stringify(self.segmentList), (err) => {
+              if (err) throw err;
+              console.log("Segments file has been saved!");
+            });*/
+
+            /*setInterval(function () {
+                self.getSegments(moduleIdentifier, accessToken)
+            }, 15 * 1000);*/
+            //self.sendSocketNotification("SEGMENTS", { "identifier": moduleIdentifier, "segments": this.segmentList });
+            self.getCrowns(moduleIdentifier, accessToken, segIDs);
+        })
+        .catch( error => console.log("Something went wrong while searching activities for segments: " +error ));
+    },
+
+
+    getCrowns: function (moduleIdentifier, accessToken, segIDs) {
+        var crownCalls = [];
+        let rankings = {
+            "Run": [0,0,0,0,0,0,0,0,0,0],
+            "Ride": [0,0,0,0,0,0,0,0,0,0]
+        };
+        var self = this;
+        if (this.crownCounter*200 > this.segmentList.length) { this.crownCounter = 0 };
+        for (var s = 200*this.crownCounter; ((s < 200*(this.crownCounter+1)) && (s < this.segmentList.length)); s++) {
+          if (this.segmentList[s].id) {
+          //self.log("Segment: "+this.segmentList[s].id);
+          crownCalls.push(new Promise((resolve, reject) => {
+            strava.segments.listLeaderboard({ "access_token": accessToken, id: self.segmentList[s].id, "context_entries": 0, "per_page": 1}, function (err, payload, limits) {
+              if (err) {
+                resolve("Error!" +err);
+              } else {
+                var entry = {};
+                var segmentLeaderboard = self.handleApiResponse(moduleIdentifier, err, payload, limits);
+                if (segmentLeaderboard) {
+                    //self.log("Leaderboard: "+JSON.stringify(segmentLeaderboard));
+                    if (segmentLeaderboard.entries.length == 2) {
+                      entry.rank = segmentLeaderboard.entries[1].rank;
+                      entry.diff = (segmentLeaderboard.entries[0].elapsed_time - segmentLeaderboard.entries[1].elapsed_time);
+                      entry.date = segmentLeaderboard.entries[1].date;
+                    } else {
+                      entry.rank = segmentLeaderboard.entries[0].rank;
+                      entry.date = segmentLeaderboard.entries[0].date;
+                    }
+                    entry.efforts = segmentLeaderboard.effort_count;
+                        //self.segmentList[s].rank = rank;
+                        //self.segmentList[s].diff = segmentLeaderboard.entries[0].elapsedTime - entry.elapsed_time;
+                }
+                resolve(entry);
+              }
+            });
+          }));
+          }
+        }
+
+
+        Promise.all(crownCalls)
+        .then(entries => {
+            //self.log("Entries: "+JSON.stringify(entries));
+            self.log("CrownCounter: "+self.crownCounter);
+            for (var e = 0; (e < entries.length); e++) {
+              if (self.segmentList[(e+200*self.crownCounter)]) {
+                self.segmentList[(e+200*self.crownCounter)].entry = entries[e];
+              }
+            };
+            self.log("SegmentList: "+JSON.stringify(self.segmentList));
+            self.crownCounter++;
+
+            var rank = 0;
+            for (var c = 0; c < self.segmentList.length; c++) {
+              if (self.segmentList[c].entry && self.segmentList[c].entry.hasOwnProperty("rank")) {
+                rank = self.segmentList[c].entry.rank;
+                this.log("Segment "+self.segmentList[c].id + ", Type: " + self.segmentList[c].type + ", Rank: "+rank);
+                if (rank < 11) {
+                  if (self.segmentList[c].type == "Run") {
+                    rankings.Run[rank-1]++;
+                  } else {
+                    rankings.Ride[rank-1]++;
+                  }
+                }
+              }
+            }
+            this.log("Rankings: "+JSON.stringify(rankings));
+
+            fs.writeFile(self.segmentsFile, JSON.stringify(self.segmentList), (err) => {
+                if (err) throw err;
+                self.log("Segments file has been saved!");
+            });
+            //this.sendSocketNotification("CROWNS", rankings);
+        }).catch(error => console.log("Something went wrong while fetching crowns: " +error));
+    },
+
+
+
     /**
      * @function handleApiResponse
      * @description handles the response from the API to catch errors and faults.
@@ -322,16 +538,18 @@ module.exports = NodeHelper.create({
         }
         // Strava API "fault"
         if (payload && payload.hasOwnProperty("message") && payload.hasOwnProperty("errors")) {
-            if (payload.errors[0].field === "access_token" && payload.errors[0].code === "invalid") {
+            this.log("STRAVA API Error: "+JSON.stringify(payload));
+            if (payload.errors[0] && payload.errors[0].field === "access_token" && payload.errors[0].code === "invalid") {
                 this.refreshTokens(moduleIdentifier);
             } else {
                 this.log({ module: moduleIdentifier, errors: payload.errors });
-                this.sendSocketNotification("ERROR", { "identifier": moduleIdentifier, "data": payload });
+                //this.sendSocketNotification("ERROR", { "identifier": moduleIdentifier, "data": payload });
             }
             return false;
         }
         // Strava Data
         if (payload) {
+            this.log(limits)
             return payload;
         }
         // Unknown response
@@ -383,6 +601,7 @@ module.exports = NodeHelper.create({
                 }
             }
         }
+        this.log("Summary: "+JSON.stringify(activitySummary));
         return activitySummary;
     },
     /**
@@ -426,6 +645,7 @@ module.exports = NodeHelper.create({
             } catch (error) {
                 this.tokens = {};
             }
+            this.log("Access Token: "+this.tokens.access_token);
             return this.tokens;
         }
     },
@@ -435,8 +655,9 @@ module.exports = NodeHelper.create({
      * @param  {string} msg            the message to be logged
      */
     log: function (msg) {
-        //if (this.config && this.config.debug) {
-          console.log(this.name + ":", JSON.stringify(msg));
-        //}
+//        if (this.config && this.config.debug) {
+          console.log(this.name + ": ", (msg));
+//        }
     }
 });
+

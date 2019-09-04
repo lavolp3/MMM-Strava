@@ -49,16 +49,17 @@ Module.register("MMM-Strava", {
     defaults: {
         client_id: "",
         client_secret: "",
-        mode: "table",                                  // Possible values "table", "chart", "progressbar"
+        mode: "chart",                                  // Possible values "table", "chart", "progressbar"
         activities: ["ride", "run", "swim"],            // Possible values "ride", "run", "swim"
         period: "recent",                               // Possible values "recent", "ytd", "all"
         stats: ["count", "distance", "pace", "achievements"],   // Possible values "count", "distance", "pace", "elevation", "moving_time", "elapsed_time", "achievements"
         auto_rotate: false,                             // Rotate stats through each period starting from specified period
         locale: config.language,
         units: config.units,
-        reloadInterval: 5 * 60 * 1000,                  // every 5 minutes
-        updateInterval: 30 * 1000,                      // 10 seconds
-        animationSpeed: 0 * 1000,                     // 2.5 seconds
+        reloadInterval: 16 * 60 * 1000,                  // every 16 minutes
+        updateInterval: 60 * 60 * 1000,                 // 1 hour
+        animationSpeed: 2.5 * 1000,                     // 2.5 seconds
+        runningGoal: 750,
         showProgressBar: true,
         shownPB: "ride",                                //will revolve between all progressbars with a goal
         goals: {
@@ -127,8 +128,8 @@ Module.register("MMM-Strava", {
         this.addFilters();
         // Initialise helper and schedule api calls
         this.log("Sending socket notification GET_DATA");
-        if (this.loading) {this.sendSocketNotification("GET_STRAVA_DATA", {"identifier": this.identifier, "config": this.config});}
-        this.scheduleUpdates();
+        this.sendSocketNotification("GET_STRAVA_DATA", {"identifier": this.identifier, "config": this.config});
+        //this.scheduleUpdates();
     },
 
 
