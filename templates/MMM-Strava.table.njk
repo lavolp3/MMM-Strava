@@ -10,7 +10,7 @@
     <table class="small">
         <thead>
             <tr class="normal">
-                <td></td>
+                <td class="title"></td>
                 <td></td>
                 {% if 'count' in config.stats %}
                 <td class="light symbol align-right stat"><span class="fa fa-hashtag" title="Activity count"></span></td>
@@ -27,36 +27,43 @@
                 {% if 'elapsed_time' in config.stats %}
                 <td class="light symbol align-right stat"><span class="fa fa-clock-o" title="Elapsed time"></span></td>
                 {% endif %}
+                {% if 'pace' in config.stats %}
+                <td class="light symbol align-right stat"><span class="fa fa-tachometer-alt" title="Pace"></span></td>
+                {% endif %}
                 {% if ('achievements' in config.stats) and (config.period === "recent") %}
                 <td class="light symbol align-right stat"><span class="fa fa-trophy" title="Achievements"></span></td>
                 {% endif %}
+
             </tr>
         </thead>
         <tbody>
 {% for activity in config.activities %}
-{% set activity_data = data[config.period + "_" + activity | lower + "_totals"] %}
+{% set activity_stats = stats[config.period + "_" + activity | lower + "_totals"] %}
             <tr class="normal">
                 <td class="title light">{{activity | upper | translate }}</td>
                 <td class="bright symbol">
-                    <div class="strava-icon icon-{{activity | lower }}"></div>
+                    <div class="strava-icon icon-{{activity | lower }} icon-table"></div>
                 </td>
                 {% if 'count' in config.stats %}
-                <td class="bright align-right stat">{{activity_data.count}}</td>
+                <td class="bright align-right stat">{{activity_stats.count}}</td>
                 {% endif %}
                 {% if 'distance' in config.stats %}
-                <td class="bright align-right stat">{{activity_data.distance | formatDistance(1, false) }}</td>
+                <td class="bright align-right stat">{{activity_stats.distance | formatDistance(1, false) }}</td>
                 {% endif %}
                 {% if 'elevation' in config.stats %}
-                <td class="bright align-right stat">{{activity_data.elevation_gain | formatElevation(1, false) }}</td>
+                <td class="bright align-right stat">{{activity_stats.elevation_gain | formatElevation(1, false) }}</td>
                 {% endif %}
                 {% if 'moving_time' in config.stats %}
-                <td class="bright align-right stat">{{activity_data.moving_time | formatTime }}</td>
+                <td class="bright align-right stat">{{activity_stats.moving_time | formatTime }}</td>
                 {% endif %}
                 {% if 'elapsed_time' in config.stats %}
-                <td class="bright align-right stat">{{activity_data.elapsed_time | formatTime }}</td>
+                <td class="bright align-right stat">{{activity_stats.elapsed_time | formatTime }}</td>
+                {% endif %}
+                {% if 'pace' in config.stats %}
+                <td class="bright align-right stat">{{activity_stats.pace}}</td>
                 {% endif %}
                 {% if ('achievements' in config.stats) and (config.period === "recent") %}
-                <td class="bright align-right stat">{{activity_data.achievement_count}}</td>
+                <td class="bright align-right stat">{{activity_stats.achievement_count}}</td>
                 {% endif %}
             </tr>
 {% endfor %}
@@ -72,11 +79,21 @@
         </tfoot>
 {% endif %}
     </table>
+{%if config.showProgressBar %}
+  {% set pbAct = config.shownPB %}
     <div class="small progressbar">
-		<svg  class="progressSVG" xmlns="http://www.w3.org/2000/svg" height="300" width="300" viewBox="0 0 300 300" data-value="50">
-			<path class="bg" stroke="#ccc" d="M90 249.5 a 100 100 0 1 1 117.93 0"  fill="none"/>
-      <path class="measure" stroke="#ddd" d="M90 249.5 a 100 100 0 1 1 117.93 0" fill="none" stroke-dasharray="510" stroke-dashoffset="{{measureOffset}}"/>
-      <path class="meter" stroke="#09c" d="M90 249.5 a 100 100 0 1 1 117.93 0" fill="none" stroke-dasharray="510" stroke-dashoffset="{{barOffset}}"/>
-		</svg>
+        <svg class="progressSVG" xmlns="http://www.w3.org/2000/svg" height="300" width="300" viewBox="0 0 300 300" data-value="50">
+    			<g class="strava-icon icon-run">
+            <path class="bg" stroke="#666" d="M90 249.5 a 100 100 0 1 1 117.93 0"  fill="none"/>
+            <path class="meter" stroke="#09c" d="M90 249.5 a 100 100 0 1 1 117.93 0" fill="none" stroke-dasharray="510" stroke-dashoffset="{{progressBar[pbAct].offset}}"/>
+            <path class="threshold" stroke="#fff" d="M90 249.5 a 100 100 0 1 1 117.93 0"  fill="none" stroke-dasharray="3 600" stroke-dashoffset="{{progressBar[pbAct].threshold}}"/>
+          </g>
+        </svg>
+        <div class="pbdata">
+          <div class="strava-icon icon-pb icon-{{pbAct}}"></div>
+          <span class="pb-dist">{{progressBar[pbAct].distance | formatDistance(0, true)}}</span></br>
+          <span class="pb-dev" style="color:{{progressBar[pbAct].color}}">{{progressBar[pbAct].deviation | formatDistance(0, true)}}</span>
+        </div>
     </div>
+{% endif %}
 {% endif %}

@@ -239,23 +239,21 @@ module.exports = NodeHelper.create({
         try {
             // Get access token
             const accessToken = moduleConfig.access_token || this.tokens[moduleConfig.client_id].token.access_token;
-            this.log("Access Token: " + accessToken);
-            if (moduleConfig.mode === "table") {
+           
                 try {
                     // Get athelete Id
                     const athleteId = moduleConfig.strava_id || this.tokens[moduleConfig.client_id].token.athlete.id;
                     // Call api
                     this.getAthleteStats(moduleIdentifier, accessToken, athleteId);
+
+                    moment.locale(moduleConfig.locale);
+                    var after = moment().startOf(moduleConfig.period === "ytd" ? "year" : "week").unix();
+                    // Call api
+                    this.getAthleteActivities(moduleIdentifier, accessToken, after);
+
                 } catch (error) {
                     this.log(`Athete id not found for ${moduleIdentifier}`);
                 }
-            } else if (moduleConfig.mode === "chart") {
-                // Get initial date
-                moment.locale(moduleConfig.locale);
-                //var after = moment().startOf(moduleConfig.period === "ytd" ? "year" : "week").unix();
-                // Call api
-                this.getAthleteActivities(moduleIdentifier, accessToken, 1);
-            }
         } catch (error) {
             this.log(`Access token not found for ${moduleIdentifier}`);
         }
@@ -662,3 +660,4 @@ module.exports = NodeHelper.create({
 //        }
     }
 });
+
