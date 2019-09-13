@@ -51,7 +51,7 @@ module.exports = NodeHelper.create({
     // Set the minimum MagicMirror module version for this module.
     requiresVersion: "2.2.0",
     // Config store e.g. this.configs["identifier"])
-    configs: Object.create(null),
+    config : Object.create(null),
     // Tokens file path
     tokensFile: `${__dirname}/tokens.json`,
     activitiesFile: `${__dirname}/cache/activities.json`,
@@ -77,25 +77,21 @@ module.exports = NodeHelper.create({
         this.log("Received notification: " + notification);
         if (notification === "GET_STRAVA_DATA") {
             // Validate module config
-            if (payload.config.access_token || payload.config.strava_id) {
-                this.log(`Legacy config in use for ${payload.identifier}`);
-                this.sendSocketNotification("WARNING", { "identifier": payload.identifier, "data": { message: "Strava authorisation is changing. Please update your config." } });
+            if (payload.access_token || payload.strava_id) {
+                this.log(`Legacy config in use`);
+                this.sendSocketNotification("WARNING", {"data": { message: "Strava authorisation is changing. Please update your config." } });
             }
-            // Initialise and store module config
-            if (!(payload.identifier in this.configs)) {
-                this.configs[payload.identifier] = {};
-            }
-            this.configs[payload.identifier].config = payload.config;
+            this.config = payload;
             // Check for token authorisations
-            if (payload.config.client_id && (!(payload.config.client_id in this.tokens))) {
-                this.log(`Unauthorised client id for ${payload.identifier}`);
-                this.sendSocketNotification("ERROR", { "identifier": payload.identifier, "data": { message: `Client id unauthorised - please visit <a href="/${self.name}/auth/">/${self.name}/auth/</a>` } });
+            if (payload.client_id && (!(payload.client_id in this.tokens))) {
+                this.log(`Unauthorised client id`);
+                this.sendSocketNotification("ERROR", { "data": { message: `Client id unauthorised - please visit <a href="/${self.name}/auth/">/${self.name}/auth/</a>` } });
             }
             // Schedule API calls
-            this.getData(payload.identifier);
+            this.getData();
             setInterval(function () {
-                self.getData(payload.identifier);
-            }, payload.config.fetchInterval);
+                self.getData();
+            }, payload.fetchInterval);
         }
     },
 
@@ -118,9 +114,8 @@ module.exports = NodeHelper.create({
      */
     authModulesRoute: function (req, res) {
         try {
-            var identifiers = Object.keys(this.configs);
-            identifiers.sort();
-            var text = JSON.stringify(identifiers);
+            var identifier = this.config;
+            var text = JSON.stringify(identifier);
             res.contentType("application/json");
             res.send(text);
         } catch (error) {
@@ -137,8 +132,7 @@ module.exports = NodeHelper.create({
      */
     authRequestRoute: function (req, res) {
         try {
-            const moduleIdentifier = req.query.module_identifier;
-            const clientId = this.configs[moduleIdentifier].config.client_id;
+            const clientId = this.config.client_id;
             const redirectUri = `http://${req.headers.host}/${this.name}/auth/exchange`;
             this.log(`Requesting access for ${clientId}`);
             const args = {
@@ -146,7 +140,6 @@ module.exports = NodeHelper.create({
                 "redirect_uri": redirectUri,
                 "approval_prompt": "force",
                 "scope": "read,activity:read,activity:read_all",
-                "state": moduleIdentifier
             };
             const url = strava.oauth.getRequestAccessURL(args);
             res.redirect(url);
@@ -165,9 +158,8 @@ module.exports = NodeHelper.create({
     authExchangeRoute: function (req, res) {
         try {
             const authCode = req.query.code;
-            const moduleIdentifier = req.query.state;
-            const clientId = this.configs[moduleIdentifier].config.client_id;
-            const clientSecret = this.configs[moduleIdentifier].config.client_secret;
+            const clientId = this.config.client_id;
+            const clientSecret = this.configs.client_secret;
             this.log(`Getting token for ${clientId}`);
             var self = this;
             const args = {
@@ -198,16 +190,16 @@ module.exports = NodeHelper.create({
      *
      * @param {string} moduleIdentifier - The module identifier.
      */
-    refreshTokens: function (moduleIdentifier) {
-        this.log(`Refreshing tokens for ${moduleIdentifier}`);
+    refreshTokens: function () {
+        this.log(`Refreshing tokens`);
         var self = this;
         const args = {
-            client_id: this.configs[moduleIdentifier].config.client_id,
-            client_secret: this.configs[moduleIdentifier].config.client_secret
+            client_id: this.config.client_id,
+            client_secret: this.config.client_secret
         };
         const token = this.tokens[args.client_id].token;
         strava.oauth.refreshTokens(args, token.refresh_token, function (err, payload, limits) {
-            var data = self.handleApiResponse(moduleIdentifier, err, payload, limits);
+            var data = self.handleApiResponse(err, payload, limits);
             if (data && (token.access_token != data.access_token || token.refresh_token != data.refresh_token)) {
                 token.token_type = data.token_type || token.token_type;
                 token.access_token = data.access_token || token.access_token;
@@ -220,7 +212,7 @@ module.exports = NodeHelper.create({
                     }
                 });
             } else {
-                throw new Error(`Failed to refresh tokens for ${moduleIdentifier}. Check config or module authorisation.`);
+                throw new Error(`Failed to refresh tokens. Check config or module authorisation.`);
             }
             return;
         });
@@ -232,9 +224,9 @@ module.exports = NodeHelper.create({
      *
      * @param {string} moduleIdentifier - The module identifier.
      */
-    getData: function (moduleIdentifier) {
-        this.log(`Getting data for ${moduleIdentifier} at` + moment().format("DD/MM HH:mm"));
-        const moduleConfig = this.configs[moduleIdentifier].config;
+    getData: function () {
+        this.log(`Getting data at` + moment().format("DD/MM HH:mm"));
+        const moduleConfig = this.config;
 
         try {
             // Get access token
@@ -244,32 +236,25 @@ module.exports = NodeHelper.create({
                     // Get athlete Id
                     const athleteId = moduleConfig.strava_id || this.tokens[moduleConfig.client_id].token.athlete.id;
                     // Call api
-                    this.getAthleteStats(moduleIdentifier, accessToken, athleteId);
+                    this.getAthleteStats(accessToken, athleteId);
 
                     moment.locale(moduleConfig.locale);
-                    // var after = moment().startOf(moduleConfig.period === "ytd" ? "year" : "week").unix();
+
                     // Call api
-                    this.getAthleteActivities(moduleIdentifier, accessToken, 1);
+                    this.getAthleteActivities(accessToken, 1);
 
                 } catch (error) {
-                    this.log(`Athete id not found for ${moduleIdentifier}`);
+                    this.log(`Athete id not found!`);
                 }
         } catch (error) {
-            this.log(`Access token not found for ${moduleIdentifier}`);
+            this.log(`Access token not found!`);
         }
     },
 
-    /**
-     * @function getAthleteStats
-     * @description get stats for an athlete from the API
-     *
-     * @param {string} moduleIdentifier - The module identifier.
-     * @param {string} accessToken
-     * @param {integer} athleteId
-     */
-    getAthleteStats: function (moduleIdentifier, accessToken, athleteId) {
-        this.log("Getting athlete stats for " + moduleIdentifier + " using " + athleteId);
-        var moduleConfig = this.configs[moduleIdentifier].config;
+
+    getAthleteStats: function (accessToken, athleteId) {
+        this.log("Getting athlete stats for using " + athleteId);
+        var moduleConfig = this.config;
         var self = this;
         strava.athletes.stats({ "access_token": accessToken, "id": athleteId }, function (err, payload, limits) {
             if (err) {
@@ -277,7 +262,7 @@ module.exports = NodeHelper.create({
             /*} else if (limits.shortTermUsage >= 600 ||  limits.longTermUsage >= 30000) {
                 self.log("API LIMIT EXCEEDED");
             */} else {
-                var statsData = self.handleApiResponse(moduleIdentifier, err, payload, limits);
+                var statsData = self.handleApiResponse(err, payload, limits);
                 //self.log("Stats: "+JSON.stringify(statsData));
                 if (statsData) {
                     for (var value in statsData) {
@@ -299,7 +284,7 @@ module.exports = NodeHelper.create({
                           }
                        }
                     }
-                    self.sendSocketNotification("STATS", { "identifier": moduleIdentifier, "stats": statsData });
+                    self.sendSocketNotification("STATS", statsData);
                 }
             }
         });
@@ -310,7 +295,7 @@ module.exports = NodeHelper.create({
      * @description get logged in athletes activities from the API
      *
      */
-    getAthleteActivities: function (moduleIdentifier, accessToken, page) {
+    getAthleteActivities: function (accessToken, page) {
         var self = this;
         var after = "946684800";
         var activityIDs = [];
@@ -342,7 +327,7 @@ module.exports = NodeHelper.create({
                 self.log("API LIMIT EXCEEDED");
                 self.sendSocketNotification("ACTIVITIES", {"identifier": moduleIdentifier, "data": self.activityList} );
             */} else {
-                var activities = self.handleApiResponse(moduleIdentifier, err, payload, limits);
+                var activities = self.handleApiResponse(err, payload, limits);
                 if (activities) {
                     console.log(activities.length + " Activities found");
                     self.activityList = self.activityList.concat(activities);
@@ -350,7 +335,7 @@ module.exports = NodeHelper.create({
                     if (activities.length == 200) {
                         self.log("More to come...");
                         page = page + 1;
-                        self.getAthleteActivities(moduleIdentifier, accessToken, page);
+                        self.getAthleteActivities(accessToken, page);
                     } else {
                         console.log("Fetched " + self.activityList.length + " Activities!");
                         for (i = 0; (i < self.activityList.length); i++) {
@@ -360,8 +345,8 @@ module.exports = NodeHelper.create({
                            if (err) throw err;
                            self.log("Activities file has been saved!");
                         });*/
-                        self.sendSocketNotification("ACTIVITIES", {"identifier": moduleIdentifier, "data": self.activityList} );
-                        self.getSegments(moduleIdentifier, accessToken);
+                        self.sendSocketNotification("ACTIVITIES", self.activityList);
+                        self.getSegments(accessToken);
                     }
                 //old module
                 /*var data = {
@@ -369,18 +354,18 @@ module.exports = NodeHelper.create({
                     "data": self.summariseActivities(moduleIdentifier, activityList),
                 };*/
               } else {
-                self.sendSocketNotification("ACTIVITIES", {"identifier": moduleIdentifier, "data": self.activityList} );
-                self.getSegments(moduleIdentifier, accessToken);
+                self.sendSocketNotification("ACTIVITIES", self.activityList);
+                self.getSegments(accessToken);
               }
             }
         });
     },
 
 
-    getSegments: function (moduleIdentifier, accessToken) {
-        this.log("Getting completed Segments for " + moduleIdentifier);
+    getSegments: function (accessToken) {
+        this.log("Getting completed Segments");
         var self = this;
-        var moduleConfig = this.configs[moduleIdentifier].config;
+        var moduleConfig = this.config;
 
         // fill Segment List
         var segIDs = [];
@@ -415,7 +400,7 @@ module.exports = NodeHelper.create({
                     resolve("API_LIMIT");
                 } else {
                   //console.log("Checking Activity: " + id);
-                  var activity = self.handleApiResponse(moduleIdentifier, err, payload, limits);
+                  var activity = self.handleApiResponse(err, payload, limits);
                   if ((activity) && (activity.segment_efforts.length)) {
                     self.log("Activity "+activity.id+": "+activity.segment_efforts.length + " Segments found!");
                     for (var j = 0; j < activity.segment_efforts.length; j++) {
@@ -462,13 +447,13 @@ module.exports = NodeHelper.create({
                 self.getSegments(moduleIdentifier, accessToken)
             }, 15 * 1000);*/
             //self.sendSocketNotification("SEGMENTS", { "identifier": moduleIdentifier, "segments": this.segmentList });
-            self.getCrowns(moduleIdentifier, accessToken, segIDs);
+            self.getCrowns(accessToken, segIDs);
         })
         .catch( error => console.log("Something went wrong while searching activities for segments: " +error ));
     },
 
 
-    getCrowns: function (moduleIdentifier, accessToken, segIDs) {
+    getCrowns: function (accessToken, segIDs) {
         var crownCalls = [];
         let rankings = {
             "Run": [0,0,0,0],            //ranks 1,2,3 and 4-10
@@ -487,7 +472,7 @@ module.exports = NodeHelper.create({
                 resolve("API_LIMIT");
               } else {
                 var entry = {};
-                var segmentLeaderboard = self.handleApiResponse(moduleIdentifier, err, payload, limits);
+                var segmentLeaderboard = self.handleApiResponse(err, payload, limits);
                 if (segmentLeaderboard) {
                     //self.log("Leaderboard: "+JSON.stringify(segmentLeaderboard));
                     if (segmentLeaderboard.entries.length == 2) {
@@ -565,21 +550,21 @@ module.exports = NodeHelper.create({
      * @param {Object} payload
      * @param {Object} limits
      */
-    handleApiResponse: function (moduleIdentifier, err, payload, limits) {
+    handleApiResponse: function (err, payload, limits) {
         // Strava-v3 package errors
         if (err) {
-            this.log({ module: moduleIdentifier, error: err });
-            //this.sendSocketNotification("ERROR", { "identifier": moduleIdentifier, "data": { "message": err.msg } });
+            this.log(err);
+            this.sendSocketNotification("ERROR", err.msg);
             return false;
         }
         // Strava API "fault"
         if (payload && payload.hasOwnProperty("message") && payload.hasOwnProperty("errors")) {
             this.log("STRAVA API Error: "+JSON.stringify(payload));
             if (payload.errors[0] && payload.errors[0].field === "access_token" && payload.errors[0].code === "invalid") {
-                this.refreshTokens(moduleIdentifier);
+                this.refreshTokens();
             } else {
-                this.log({ module: moduleIdentifier, errors: payload.errors });
-                //this.sendSocketNotification("ERROR", { "identifier": moduleIdentifier, "data": payload });
+                this.log(payload.errors);
+                //this.sendSocketNotification("ERROR", payload);
             }
             return false;
         }
@@ -589,7 +574,7 @@ module.exports = NodeHelper.create({
             return payload;
         }
         // Unknown response
-        this.log(`Unable to handle API response for ${moduleIdentifier}`);
+        this.log(`Unable to handle API response`);
         return false;
     },
 
@@ -599,9 +584,9 @@ module.exports = NodeHelper.create({
      *
      * @param {string} moduleIdentifier - The module identifier.
      */
-    summariseActivities: function (moduleIdentifier, activityList) {
-        this.log("Summarising athlete activities for " + moduleIdentifier);
-        var moduleConfig = this.configs[moduleIdentifier].config;
+    summariseActivities: function (activityList) {
+        this.log("Summarising athlete activities");
+        var moduleConfig = this.config;
         var activitySummary = Object.create(null);
         var activityName;
         // Initialise activity summary
@@ -682,18 +667,18 @@ module.exports = NodeHelper.create({
             } catch (error) {
                 this.tokens = {};
             }
-            this.log("Access Token: "+this.tokens.access_token);
             return this.tokens;
         }
     },
+
     /**
      * @function log
      * @description logs the message, prefixed by the Module name, if debug is enabled.
      * @param  {string} msg            the message to be logged
      */
     log: function (msg) {
-//        if (this.config && this.config.debug) {
+        if (this.config && this.config.debug) {
           console.log(this.name + ": ", (msg));
-//        }
+        }
     }
 });

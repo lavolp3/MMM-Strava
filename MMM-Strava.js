@@ -85,7 +85,7 @@ Module.register("MMM-Strava", {
         this.addFilters();
         // Initialise helper and schedule api calls
         this.log("Sending socket notification GET_DATA");
-        this.sendSocketNotification("GET_STRAVA_DATA", {"identifier": this.identifier, "config": this.config});
+        this.sendSocketNotification("GET_STRAVA_DATA", this.config);
         this.scheduleUpdates();
     },
 
@@ -93,12 +93,12 @@ Module.register("MMM-Strava", {
     socketNotificationReceived: function(notification, payload) {
         this.log(`Receiving notification: ${notification}`);
         if (notification === "STATS") {
-            this.stats = payload.stats;
+            this.stats = payload;
             //this.log("Athlete stats: "+JSON.stringify(this.stats));
             //this.loading = false;
             //this.updateDom(this.config.animationSpeed);
         } else if (notification === "ACTIVITIES") {
-            this.activityList = payload.data;
+            this.activityList = payload;
             //this.log("Athlete activities: "+JSON.stringify(this.activityList));
             this.yearlies = this.getYearlies(this.activityList);
             //this.weeklyScore = this.getWeeklyScore(this.activityList);
@@ -119,7 +119,6 @@ Module.register("MMM-Strava", {
           this.loading = false;
           this.updateDom(this.config.animatonSpeed);
         }
-        //this.updateDom(this.config.animatonSpeed);
     },
 
 
