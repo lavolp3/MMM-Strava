@@ -227,3 +227,43 @@ div.module.MMM-Strava-Authorisation {
   left: 100px;
   font-size: 19px;
 }
+
+.MMM-Strava .crownTables {
+  display: block;
+}
+
+.MMM-Strava .crownTables .crownHeader .strava-icon{
+  height: 60px;
+  width: 60px;
+  padding: 5px;
+}
+
+.MMM-Strava .crownTables .runCrowns {
+  #float: left;
+}
+
+.MMM-Strava .crownTables .crownTable {
+  padding: 10px 10px;
+}
+
+.MMM-Strava .crownTables .crownTable tr {
+  height: 30px;
+  width: 70px;
+}
+
+.MMM-Strava .crownTables .crownData {
+  width: 60px;
+  padding: 3px 10px;
+}
+
+.MMM-Strava .gold {
+  color: #ffd700;
+}
+
+.MMM-Strava .silver {
+  color: #c0c0c0;
+}
+
+.MMM-Strava .bronze {
+  color: #cd7f32;
+}

@@ -1,7 +1,3 @@
-
-
-
-
 /**
  * @file MMM-Strava.js
  *
@@ -13,35 +9,6 @@
 
 /* global Module, config, Log, moment */
 
-/**
- * @external Module
- * @see https://github.com/MichMich/MagicMirror/blob/master/js/module.js
- */
-
-/**
- * @external config
- * @see https://github.com/MichMich/MagicMirror/blob/master/config/config.js.sample
- */
-
-/**
- * @external Log
- * @see https://github.com/MichMich/MagicMirror/blob/master/js/logger.js
- */
-
-/**
- * @external moment
- * @see https://www.npmjs.com/package/moment
- */
-
-/**
- * @module MMM-Strava
- * @description Frontend of the MagicMirror² module.
- *
- * @requires external:Module
- * @requires external:config
- * @requires external:Log
- * @requires external:moment
- */
 Module.register("MMM-Strava", {
     // Set the minimum MagicMirror module version for this module.
     requiresVersion: "2.2.0",
@@ -56,19 +23,21 @@ Module.register("MMM-Strava", {
         auto_rotate: false,                             // Rotate stats through each period starting from specified period
         locale: config.language,
         units: config.units,
-        reloadInterval: 16 * 60 * 1000,                  // every 16 minutes
+        fetchInterval: 15 * 60 * 1000,                  // every 16 minutes
         updateInterval: 60 * 60 * 1000,                 // 1 hour
         animationSpeed: 2.5 * 1000,                     // 2.5 seconds
         runningGoal: 750,
-        showProgressBar: true,
+        showProgressBar: false,
         shownPB: "ride",                                //will revolve between all progressbars with a goal
         goals: {
           "ride": 1000,
           "run": 750,
           "swim": 0,
         },
+        showCrowns: true,
         debug: true,                                    // Set to true to enable extending logging
     },
+
     /**
      * @member {boolean} loading - Flag to indicate the loading state of the module.
      */
@@ -77,24 +46,16 @@ Module.register("MMM-Strava", {
      * @member {boolean} rotating - Flag to indicate the rotating state of the module.
      */
     rotating: false,
+    activityList: [],
+    segmentList: [],
+    stats: [],
+    rankings: [],
+    yearlies: [],
 
-    /**
-     * @function getStyles
-     * @description Style dependencies for this module.
-     * @override
-     *
-     * @returns {string[]} List of the style dependency filepaths.
-     */
     getStyles: function() {
         return ["font-awesome.css", "MMM-Strava.css"];
     },
-    /**
-     * @function getScripts
-     * @description Script dependencies for this module.
-     * @override
-     *
-     * @returns {string[]} List of the script dependency filepaths.
-     */
+
     getScripts: function() {
         return ["moment.js"];
     },
@@ -114,11 +75,7 @@ Module.register("MMM-Strava", {
             hu: "translations/hu.json"
         };
     },
-    /**
-     * @function start
-     * @description Validates config values, adds nunjuck filters and initialises requests for data.
-     * @override
-     */
+
     start: function() {
         Log.info("Starting module: " + this.name);
         // Validate config
@@ -129,55 +86,67 @@ Module.register("MMM-Strava", {
         // Initialise helper and schedule api calls
         this.log("Sending socket notification GET_DATA");
         this.sendSocketNotification("GET_STRAVA_DATA", {"identifier": this.identifier, "config": this.config});
-        //this.scheduleUpdates();
+        this.scheduleUpdates();
     },
 
 
     socketNotificationReceived: function(notification, payload) {
-        this.log(`Receiving notification: ${notification} for ${payload.identifier}`);
-        if (payload.identifier === this.identifier) {
-            if (notification === "STATS") {
-                this.stats = payload.stats;
-                this.log("Athlete stats: "+JSON.stringify(this.stats));
-                //this.loading = false;
-                //this.updateDom(this.config.animationSpeed);
-            } else if (notification === "ACTIVITIES") {
-                this.activities = payload.data;
-                this.log("Athlete activities: "+JSON.stringify(this.activities));
-                this.loading = false;
-                this.updateDom(this.config.animationSpeed);
-            } else if (notification === "ERROR") {
-                this.loading = false;
-                this.error = payload.data.message;
-                this.updateDom(this.config.animationSpeed);
-            } else if (notification === "WARNING") {
-                this.loading = false;
-                this.sendNotification("SHOW_ALERT", {type: "notification", title: payload.data.message});
-            }
+        this.log(`Receiving notification: ${notification}`);
+        if (notification === "STATS") {
+            this.stats = payload.stats;
+            //this.log("Athlete stats: "+JSON.stringify(this.stats));
+            //this.loading = false;
+            //this.updateDom(this.config.animationSpeed);
+        } else if (notification === "ACTIVITIES") {
+            this.activityList = payload.data;
+            //this.log("Athlete activities: "+JSON.stringify(this.activityList));
+            this.yearlies = this.getYearlies(this.activityList);
+            //this.weeklyScore = this.getWeeklyScore(this.activityList);
+            //this.loading = false;
+        } else if (notification === "CROWNS") {
+            this.rankings = payload;
+            console.log(JSON.stringify(this.rankings));
+            //this.updateDom(this.config.animatonSpeed);
+        } else if (notification === "ERROR") {
+            //this.loading = false;
+            this.error = payload.data.message;
+            this.updateDom(this.config.animationSpeed);
+        } else if (notification === "WARNING") {
+            //this.loading = false;
+            this.sendNotification("SHOW_ALERT", {type: "notification", title: payload.data.message});
         }
+        if (this.stats && this.activityList && this.rankings) {
+          this.loading = false;
+          this.updateDom(this.config.animatonSpeed);
+        }
+        //this.updateDom(this.config.animatonSpeed);
     },
 
 
     getTemplate: function() {
-        return "templates\\MMM-Strava." + this.config.mode + ".njk";
+        return "templates\\MMM-Strava.njk";
     },
 
 
     getTemplateData: function() {
         moment.locale(this.config.locale);
         this.log("Updating template data");
+        //this.log("Act: "+this.activityList);
+        this.log("Stats: "+this.stats);
+        this.log("Ranks: "+this.rankings);
         return {
             config: this.config,
             loading: this.loading,
             error: this.error || null,
             stats: this.stats || {},
-            activities: this.activities || {},
+            activities: this.activityList || {},
             chart: {bars: this.config.period === "ytd" ? moment.monthsShort() : moment.weekdaysShort() },
-            progressBar: {
-              "run": this.addMeasure(this.stats.ytd_run_totals.distance, "run"),
-              "ride": this.addMeasure(this.stats.ytd_ride_totals.distance, "ride"),
-              "swim": this.addMeasure(this.stats.ytd_swim_totals.distance, "swim")
-            }
+            rankings: this.rankings || {},
+            /*progressBar: {
+                "run": this.addMeasure(this.stats.ytd_run_totals.distance || 0, "run"),
+                "ride": this.addMeasure(this.stats.ytd_ride_totals.distance || 0, "ride"),
+                "swim": this.addMeasure(this.stats.ytd_swim_totals.distance || 0, "swim")
+            }*/
         };
     },
 
@@ -214,7 +183,6 @@ Module.register("MMM-Strava", {
         env.addFilter("formatDistance", this.formatDistance.bind(this));
         env.addFilter("formatElevation", this.formatElevation.bind(this));
         env.addFilter("roundValue", this.roundValue.bind(this));
-        env.addFilter("getPace", this.getPace.bind(this));
     },
 
 
@@ -241,18 +209,6 @@ Module.register("MMM-Strava", {
         return intervalDate.format(labelUnit).slice(0,1).toUpperCase();
     },
 
-
-    getPace: function(activity, period) {
-        moment.locale(this.config.locale);
-        switch (activity) {
-            case "run":
-                break;
-            case "swim":
-                break;
-            case "ride":
-                break;
-        }
-    },
 
     formatTime: function(timeInSeconds) {
         var duration = moment.duration(timeInSeconds, "seconds");
@@ -296,7 +252,7 @@ Module.register("MMM-Strava", {
 
     /**
      * @function addMeasure
-     * @description adds measure offset to progress bar to show comparative progress.
+     * @description adds progress bar parameters to show comparative progress.
      *
      */
     addMeasure: function(distance, sport) {
@@ -319,5 +275,57 @@ Module.register("MMM-Strava", {
         "threshold": Math.round(-510 * partOfYear),
         "distance": distance,
       });
+    },
+
+    getYearlies: function(activityList) {
+      var thisYear = moment().year();
+      var startYear = thisYear - 4;
+      var year, week, actType;
+      var yearlies = {
+        "Run": {},
+        "Ride": {},
+        "Swim": {}
+      };
+      var distances = {};
+      for (var act in yearlies) {
+        for (var y = startYear; y < thisYear+1; y++) {
+          yearlies[act][y] = {
+            "cum": 0
+          };
+          /*for (var w = 1; w < 53; w++) {
+            yearlies[act][y][w] = 0
+          }*/
+        }
+      }
+      //console.log("Yearlies: "+JSON.stringify(yearlies));
+      for (var a = 0; a < activityList.length; a++) {
+        year = moment(activityList[a].start_date).year();
+        if (year >= startYear) {
+          actType = (activityList[a].type);
+          week = moment(activityList[a].start_date_local).week();
+          if (yearlies.hasOwnProperty(actType)) {
+            yearlies[actType][year][week] = yearlies[actType][year].cum += Math.round(activityList[a].distance);
+          }
+        }
+      }
+      console.log("Yearlies: "+JSON.stringify(yearlies));
+      return(yearlies);
+    },
+
+    getWeeklyScore: function(activityList) {
+      var weeklyScore = [];
+      var firstWeek = moment().subtract(13, 'weeks').startOf('week');
+      console.log(firstWeek);
+      /*var actIndex = activityList.findIndex(index => function(element, index) {
+        return (moment(element[index].start_date_local).startOfWeek() >= firstWeek)
+        });
+      console.log(actIndex);
+      activityList = activityList.slice(actIndex);
+      console.log (activityList);*/
+      var weekCount = 0;
+      for (var act in activityList) {
+        this.weeklyScore[(moment(act.start_date_local).week() - moment(firstWeek).week())] += act.suffer_score;
+      }
+      console.log("Weeklies: "+this.weeklyScore);
     }
 });

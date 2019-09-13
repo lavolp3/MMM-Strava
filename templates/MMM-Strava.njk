@@ -1,0 +1,200 @@
+{% if loading %}
+    <div class="small dimmed light">
+        {{ 'LOADING' | translate | safe }}
+    </div>
+{% elif error %}
+    <div class="small dimmed light">
+        {{ error | safe }}
+    </div>
+{% else %}
+  {%if config.mode == "table" %}
+      <table class="small">
+          <thead>
+              <tr class="normal">
+                  <td class="title"></td>
+                  <td></td>
+                  {% if 'count' in config.stats %}
+                  <td class="light symbol align-right stat"><span class="fas fa-hashtag" title="Activity count"></span></td>
+                  {% endif %}
+                  {% if 'distance' in config.stats %}
+                  <td class="light symbol align-right stat"><span class="fas fa-arrows-alt-h" title="Distance"></span></td>
+                  {% endif %}
+                  {% if 'elevation' in config.stats %}
+                  <td class="light symbol align-right stat"><span class="fa fa-line-chart" title="Elevation"></span></td>
+                  {% endif %}
+                  {% if 'moving_time' in config.stats %}
+                  <td class="light symbol align-right stat"><span class="fas fa-stopwatch" title="Moving time"></span></td>
+                  {% endif %}
+                  {% if 'elapsed_time' in config.stats %}
+                  <td class="light symbol align-right stat"><span class="fas fa-clock" title="Elapsed time"></span></td>
+                  {% endif %}
+                  {% if 'pace' in config.stats %}
+                  <td class="light symbol align-right stat"><span class="fas fa-tachometer-alt" title="Pace"></span></td>
+                  {% endif %}
+                  {% if ('achievements' in config.stats) and (config.period === "recent") %}
+                  <td class="light symbol align-right stat"><span class="fas fa-trophy" title="Achievements"></span></td>
+                  {% endif %}
+
+              </tr>
+          </thead>
+          <tbody>
+  {% for activity in config.activities %}
+  {% set activity_stats = stats[config.period + "_" + activity | lower + "_totals"] %}
+              <tr class="normal">
+                  <td class="title light">{{activity | upper | translate }}</td>
+                  <td class="bright symbol">
+                      <div class="strava-icon icon-{{activity | lower }} icon-table"></div>
+                  </td>
+                  {% if 'count' in config.stats %}
+                  <td class="bright align-right stat">{{activity_stats.count}}</td>
+                  {% endif %}
+                  {% if 'distance' in config.stats %}
+                  <td class="bright align-right stat">{{activity_stats.distance | formatDistance(1, false) }}</td>
+                  {% endif %}
+                  {% if 'elevation' in config.stats %}
+                  <td class="bright align-right stat">{{activity_stats.elevation_gain | formatElevation(1, false) }}</td>
+                  {% endif %}
+                  {% if 'moving_time' in config.stats %}
+                  <td class="bright align-right stat">{{activity_stats.moving_time | formatTime }}</td>
+                  {% endif %}
+                  {% if 'elapsed_time' in config.stats %}
+                  <td class="bright align-right stat">{{activity_stats.elapsed_time | formatTime }}</td>
+                  {% endif %}
+                  {% if 'pace' in config.stats %}
+                  <td class="bright align-right stat">{{activity_stats.pace}}</td>
+                  {% endif %}
+                  {% if ('achievements' in config.stats) and (config.period === "recent") %}
+                  <td class="bright align-right stat">{{activity_stats.achievement_count}}</td>
+                  {% endif %}
+              </tr>
+  {% endfor %}
+          </tbody>
+  {%  if config.auto_rotate %}
+          <tfoot>
+              <!-- period label -->
+              <tr class="xsmall">
+                  <td class="align-right" colSpan="100%">
+                      {{config.period | upper | translate }}
+                  </td>
+              </tr>
+          </tfoot>
+  {% endif %}
+      </table>
+
+  {%elif config.mode == "chart" %}
+      <div class="small">
+    {% for activity in config.activities %}
+      {% set total_distance = activities[activity].total_distance %}
+          <div class="chart" id="{{activity | lower }}">
+              <div class="primary-stats">
+                  <span class="actual small bright">{{ total_distance | formatDistance(1, true) }}</span>
+                  <ul class="inline-stats">
+                      <li class="xsmall light">{{ activities[activity].total_moving_time | formatTime }}</li>
+                      {%  if activity !== 'swim' %}
+                      <li class="xsmall light">{{ activities[activity].total_elevation_gain | formatElevation(1, true) }}</li>
+                      {% endif %}
+                  </ul>
+              </div>
+              <svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="{{ 12.5 * (activities[activity].intervals | length) }}" height="68" class="chartSVG">
+                  <g class="activity-chart" transform="translate(3.3, 0)">
+                  {% for interval in activities[activity].intervals %}
+                  {% set bar_height = (interval/activities[activity].max_interval_distance * 45) if (interval > 0) else 2 %}
+                      <g class="bar-container" transform="translate({{ loop.index0 * 12.5 }}, 0)">
+                          <rect class="bar {{ loop.index0 | getIntervalClass }}" y="{{ 50 - bar_height }}" width="6.6" height="{{ bar_height }}"></rect>
+                      </g>
+                      <g class="label-container" transform="translate({{ loop.index0 * 12.5 }}, 63)">
+                          <text class="label {{ loop.index0 | getIntervalClass }}" x="0" y="0">{{ loop.index0 | getLabel }}</text>
+                      </g>
+                  {% endfor %}
+                  </g>
+              </svg>
+              <div class="strava-icon icon-lg icon-{{ activity | lower }}" title="{{ activity | upper | translate }}"></div>
+          </div>
+    {% endfor %}
+      </div>
+  {% endif %}
+
+  {%if config.showProgressBar %}
+    {% set pbAct = config.shownPB %}
+      <div class="small progressbar">
+        <svg class="progressSVG" xmlns="http://www.w3.org/2000/svg" height="300" width="300" viewBox="0 0 300 300" data-value="50">
+          <g class="strava-icon icon-run">
+            <path class="bg" stroke="#666" d="M90 249.5 a 100 100 0 1 1 117.93 0"  fill="none"/>
+            <path class="meter" stroke="#09c" d="M90 249.5 a 100 100 0 1 1 117.93 0" fill="none" stroke-dasharray="510" stroke-dashoffset="{{progressBar[pbAct].offset}}"/>
+            <path class="threshold" stroke="#fff" d="M90 249.5 a 100 100 0 1 1 117.93 0"  fill="none" stroke-dasharray="3 600" stroke-dashoffset="{{progressBar[pbAct].threshold}}"/>
+          </g>
+        </svg>
+        <div class="pbdata">
+          <div class="strava-icon icon-pb icon-{{pbAct}}"></div>
+          <span class="pb-dist">{{progressBar[pbAct].distance | formatDistance(0, true)}}</span></br>
+          <span class="pb-dev" style="color:{{progressBar[pbAct].color}}">{{progressBar[pbAct].deviation | formatDistance(0, true)}} km</span>
+        </div>
+      </div>
+  {% endif %}
+
+  {%if config.showCrowns %}
+      <div class="small crownTables">
+        {#<div class="small runCrowns">
+          <table class="crownTable">
+            <tr>
+              <th class="crownHeader" colspan="4"><span class="strava-icon icon-run"></th>
+            </tr>
+            <tr>
+              <td class="crownData"><span class="fas fa-crown gold"></span><br>{{rankings.Run[0]}}</td>
+              <td class="crownData"><span class="fas fa-trophy silver"></span><br>{{rankings.Run[1]}}</td>
+              <td class="crownData"><span class="fas fa-trophy bronze"></span><br>{{rankings.Run[2]}}</td>
+              <td class="crownData"><span class="xsmall">4-10</span><br>{{rankings.Run[3]}}</td>
+            </tr>
+          </table>
+        </div>
+        <div class="small rideCrowns">
+          <table class="crownTable">
+            <tr>
+              <th class="crownHeader" colspan="4"><span class="strava-icon icon-ride"></th>
+            </tr>
+            <tr>
+              <td class="crownData"><span class="fas fa-crown gold"></span><br>{{rankings.Ride[0]}}</td>
+              <td class="crownData"><span class="fas fa-trophy silver"></span><br>{{rankings.Ride[1]}}</td>
+              <td class="crownData"><span class="fas fa-trophy bronze"></span><br>{{rankings.Ride[2]}}</td>
+              <td class="crownData"><span class="xsmall">4-10</span><br>{{rankings.Run[3]}}</td>
+            </tr>
+          </table>
+        </div>#}
+
+        <div class="small runCrowns">
+          <table class="crownTable">
+            <tr>
+              <td class="crownHeader" rowspan="2"><div class="strava-icon icon-run"> </div></td>
+              <td class="crownData"><span class="fas fa-crown gold"></span></td>
+              <td class="crownData"><span class="fas fa-trophy silver"></span></td>
+              <td class="crownData"><span class="fas fa-trophy bronze"></span></td>
+              <td class="crownData"><span class="xsmall">4-10</span></td>
+            </tr>
+            <tr>
+              <td class="crownData">{{rankings.Run[0]}}</td>
+              <td class="crownData">{{rankings.Run[1]}}</td>
+              <td class="crownData">{{rankings.Run[2]}}</td>
+              <td class="crownData">{{rankings.Run[3]}}</td>
+            </tr>
+          </table>
+        </div>
+        <div class="small rideCrowns">
+          <table class="crownTable">
+            <tr>
+              <td class="crownHeader" rowspan="2"><div class="strava-icon icon-ride"> </div></td>
+              <td class="crownData"><span class="fas fa-crown gold"></span></td>
+              <td class="crownData"><span class="fas fa-trophy silver"></span></td>
+              <td class="crownData"><span class="fas fa-trophy bronze"></span></td>
+              <td class="crownData"><span class="xsmall">4-10</span></td>
+            </tr>
+            <tr>
+              <td class="crownData">{{rankings.Ride[0]}}</td>
+              <td class="crownData">{{rankings.Ride[1]}}</td>
+              <td class="crownData">{{rankings.Ride[2]}}</td>
+              <td class="crownData">{{rankings.Ride[3]}}</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+  {% endif %}
+{% endif %}
