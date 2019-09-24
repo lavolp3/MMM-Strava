@@ -23,8 +23,8 @@ Module.register("MMM-Strava", {
         auto_rotate: false,                             // Rotate stats through each period starting from specified period
         locale: config.language,
         units: config.units,
-        fetchInterval: 15 * 60 * 1000,                  // every 16 minutes
-        updateInterval: 60 * 60 * 1000,                 // 1 hour
+        fetchInterval: 15 * 60 * 1000,                  // every 15 minutes
+        updateInterval: 2 * 60 * 1000,                 // 2 minutes
         animationSpeed: 2.5 * 1000,                     // 2.5 seconds
         runningGoal: 750,
         showProgressBar: false,
@@ -35,6 +35,14 @@ Module.register("MMM-Strava", {
           "swim": 0,
         },
         showCrowns: true,
+        showRecords: true,
+        distances: {
+          "400m": 400,
+          "1k": 1000,
+          "5k": 5000,
+          "10k": 10000,
+          "HM": 21097,
+        },
         debug: true,                                    // Set to true to enable extending logging
     },
 
@@ -51,13 +59,17 @@ Module.register("MMM-Strava", {
     stats: [],
     rankings: [],
     yearlies: [],
+    records: new Object({}),
 
     getStyles: function() {
         return ["font-awesome.css", "MMM-Strava.css"];
     },
 
     getScripts: function() {
-        return ["moment.js"];
+        return [
+          "moment.js",
+          "modules/MMM-Strava/node_modules/moment-duration-format/lib/moment-duration-format.js"
+        ];
     },
     /**
      * @function getTranslations
@@ -105,7 +117,11 @@ Module.register("MMM-Strava", {
             //this.loading = false;
         } else if (notification === "CROWNS") {
             this.rankings = payload;
-            console.log(JSON.stringify(this.rankings));
+            this.log("Received Rankings: "+JSON.stringify(this.rankings));
+            //this.updateDom(this.config.animatonSpeed);
+        } else if (notification === "RECORDS") {
+            this.records = payload;
+            this.log("Received Records: "+JSON.stringify(this.records));
             //this.updateDom(this.config.animatonSpeed);
         } else if (notification === "ERROR") {
             //this.loading = false;
@@ -128,11 +144,11 @@ Module.register("MMM-Strava", {
 
 
     getTemplateData: function() {
-        moment.locale(this.config.locale);
+        moment.locale(this.config.language);
         this.log("Updating template data");
         //this.log("Act: "+this.activityList);
-        this.log("Stats: "+this.stats);
-        this.log("Ranks: "+this.rankings);
+        //this.log("Stats: "+this.stats);
+        //this.log("Ranks: "+this.rankings);
         return {
             config: this.config,
             loading: this.loading,
@@ -141,6 +157,7 @@ Module.register("MMM-Strava", {
             activities: this.activityList || {},
             chart: {bars: this.config.period === "ytd" ? moment.monthsShort() : moment.weekdaysShort() },
             rankings: this.rankings || {},
+            records: this.records || {}
             /*progressBar: {
                 "run": this.addMeasure(this.stats.ytd_run_totals.distance || 0, "run"),
                 "ride": this.addMeasure(this.stats.ytd_ride_totals.distance || 0, "ride"),
@@ -210,8 +227,16 @@ Module.register("MMM-Strava", {
 
 
     formatTime: function(timeInSeconds) {
-        var duration = moment.duration(timeInSeconds, "seconds");
-        return Math.floor(duration.asHours()) + "h " + duration.minutes() + "m";
+        return moment.duration(timeInSeconds, "seconds").format();
+        /*var duration = moment.duration(timeInSeconds, "seconds");
+        //console.log("Duration: "+duration);
+        if (duration > 3599000) {
+          return Math.floor(duration.hours()) + ":" + duration.minutes()+":"+duration.seconds();
+        } else if (duration > 59000) {
+          return (duration.minutes()+":"+duration.seconds());
+        } else {
+          return duration.seconds() + "s";
+        }*/
     },
 
 

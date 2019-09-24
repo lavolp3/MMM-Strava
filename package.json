@@ -24,7 +24,10 @@
     "url": "https://github.com/ianperrin/MMM-Strava/issues"
   },
   "homepage": "https://github.com/ianperrin/MMM-Strava/#readme",
-  "dependencies": {},
+  "dependencies": {
+    "moment-duration-format": "^2.3.2",
+    "strava-v3": "^1.14.0"
+  },
   "devDependencies": {
     "grunt": "latest",
     "grunt-contrib-jshint": "latest",

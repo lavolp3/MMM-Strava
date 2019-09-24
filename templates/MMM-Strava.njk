@@ -7,7 +7,7 @@
         {{ error | safe }}
     </div>
 {% else %}
-  {%if config.mode == "table" %}
+  {% if config.mode == "table" %}
       <table class="small">
           <thead>
               <tr class="normal">
@@ -38,8 +38,8 @@
               </tr>
           </thead>
           <tbody>
-  {% for activity in config.activities %}
-  {% set activity_stats = stats[config.period + "_" + activity | lower + "_totals"] %}
+    {% for activity in config.activities %}
+      {% set activity_stats = stats[config.period + "_" + activity | lower + "_totals"] %}
               <tr class="normal">
                   <td class="title light">{{activity | upper | translate }}</td>
                   <td class="bright symbol">
@@ -67,9 +67,9 @@
                   <td class="bright align-right stat">{{activity_stats.achievement_count}}</td>
                   {% endif %}
               </tr>
-  {% endfor %}
+    {% endfor %}
           </tbody>
-  {%  if config.auto_rotate %}
+    {% if config.auto_rotate %}
           <tfoot>
               <!-- period label -->
               <tr class="xsmall">
@@ -78,10 +78,10 @@
                   </td>
               </tr>
           </tfoot>
-  {% endif %}
+    {% endif %}
       </table>
 
-  {%elif config.mode == "chart" %}
+  {% elif config.mode == "chart" %}
       <div class="small">
     {% for activity in config.activities %}
       {% set total_distance = activities[activity].total_distance %}
@@ -114,8 +114,9 @@
       </div>
   {% endif %}
 
-  {%if config.showProgressBar %}
+  {% if config.showProgressBar %}
     {% set pbAct = config.shownPB %}
+      <header class="moduleHeader">Yearly Progress</header>
       <div class="small progressbar">
         <svg class="progressSVG" xmlns="http://www.w3.org/2000/svg" height="300" width="300" viewBox="0 0 300 300" data-value="50">
           <g class="strava-icon icon-run">
@@ -132,35 +133,9 @@
       </div>
   {% endif %}
 
-  {%if config.showCrowns %}
+  {% if config.showCrowns %}
       <div class="small crownTables">
-        {#<div class="small runCrowns">
-          <table class="crownTable">
-            <tr>
-              <th class="crownHeader" colspan="4"><span class="strava-icon icon-run"></th>
-            </tr>
-            <tr>
-              <td class="crownData"><span class="fas fa-crown gold"></span><br>{{rankings.Run[0]}}</td>
-              <td class="crownData"><span class="fas fa-trophy silver"></span><br>{{rankings.Run[1]}}</td>
-              <td class="crownData"><span class="fas fa-trophy bronze"></span><br>{{rankings.Run[2]}}</td>
-              <td class="crownData"><span class="xsmall">4-10</span><br>{{rankings.Run[3]}}</td>
-            </tr>
-          </table>
-        </div>
-        <div class="small rideCrowns">
-          <table class="crownTable">
-            <tr>
-              <th class="crownHeader" colspan="4"><span class="strava-icon icon-ride"></th>
-            </tr>
-            <tr>
-              <td class="crownData"><span class="fas fa-crown gold"></span><br>{{rankings.Ride[0]}}</td>
-              <td class="crownData"><span class="fas fa-trophy silver"></span><br>{{rankings.Ride[1]}}</td>
-              <td class="crownData"><span class="fas fa-trophy bronze"></span><br>{{rankings.Ride[2]}}</td>
-              <td class="crownData"><span class="xsmall">4-10</span><br>{{rankings.Run[3]}}</td>
-            </tr>
-          </table>
-        </div>#}
-
+        <header class="moduleHeader">Crowns</header>
         <div class="small runCrowns">
           <table class="crownTable">
             <tr>
@@ -196,5 +171,19 @@
           </table>
         </div>
       </div>
+  {% endif %}
+  {% if config.showRecords %}
+    <header class="moduleHeader">Best Efforts</header>
+    <table class="small">
+      {% for name, dist in config.distances %}
+      <tr>
+        <td class="recordHeader">{{ name }}</td>
+        <td class="recordContent">
+          <div class="small"><span class= "medal fas fa-medal gold"></span><span class="recordDate xsmall">{{records.Run[dist][0].date}}</span><div class="record">{{records.Run[dist][0].time | formatTime }}</div></div>
+          <div class="xsmall"><span class= "medal fas fa-medal silver"></span><span class="recordDate">{{records.Run[dist][1].date}}</span><div class="record dimmed">{{records.Run[dist][1].time | formatTime }}</div></div>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
   {% endif %}
 {% endif %}

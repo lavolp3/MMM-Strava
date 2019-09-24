@@ -1,4 +1,4 @@
-/***************************
+/**************************
  * MMM-Strava Module
  ***************************/
 .MMM-Strava .symbol {
@@ -192,7 +192,7 @@ div.module.MMM-Strava-Authorisation {
 }
 
 /*********************
-****PROGRESS BAR
+*    PROGRESS BAR
 *********************/
 
 .MMM-Strava .progressbar {
@@ -227,6 +227,11 @@ div.module.MMM-Strava-Authorisation {
   left: 100px;
   font-size: 19px;
 }
+
+
+/*********************
+*   CROWNS
+**********************/
 
 .MMM-Strava .crownTables {
   display: block;
@@ -266,4 +271,40 @@ div.module.MMM-Strava-Authorisation {
 
 .MMM-Strava .bronze {
   color: #cd7f32;
+}
+
+
+
+/*********************
+*    RECORDS
+*********************/
+
+
+.MMM-Strava .recordContent {
+  margin-bottom: 0.2em;
+}
+
+.MMM-Strava .recordHeader {
+  vertical-align: top;
+  width: 100px;
+}
+
+.MMM-Strava .recordContent .recordDate {
+  float: right;
+  display: table;
+  vertical-align: bottom;
+}
+
+.MMM-Strava .recordContent .medal {
+  float: left;
+  width: 40px;
+  display: table;
+  margin: auto;
+  vertical-align: middle;
+}
+
+
+.MMM-Strava .recordContent .record {
+  width: 125px;
+  text-align: left;
 }
