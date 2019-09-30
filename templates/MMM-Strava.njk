@@ -186,4 +186,21 @@
       {% endfor %}
     </table>
   {% endif %}
+  {% if config.showYearlies %}
+    <header class="moduleHeader">Yearlies</header>
+  {% endif %}
+  {% if config.interval.show %}
+    <header class="moduleHeader">Interval distances: {{ config.interval.name }}ly</header>
+    <div class="chartWrapper">
+      <canvas style="width: 300px; height: 300px" id="intervalChart">
+      </canvas>
+    </div>
+  {% endif %}
+  {% if config.relativeEffort %}
+    <header class="moduleHeader">Relative Effort</header>
+    <div class="chartWrapper">
+      <canvas style="width: 300px; height: 300px" id="effortChart">
+      </canvas>
+    </div>
+  {% endif %}
 {% endif %}

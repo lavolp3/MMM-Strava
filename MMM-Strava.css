@@ -308,3 +308,18 @@ div.module.MMM-Strava-Authorisation {
   width: 125px;
   text-align: left;
 }
+
+
+/*********************
+*    CHARTS
+*********************/
+
+/*.MMM-Strava .chartWrapper {
+  height: 300px;
+  width: 300px;
+}*/
+
+.MMM-Strava canvas {
+  height: 300px;
+  width: 300px;
+}

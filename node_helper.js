@@ -50,7 +50,6 @@ module.exports = NodeHelper.create({
     },
     // Set the minimum MagicMirror module version for this module.
     requiresVersion: "2.2.0",
-    // Config store e.g. this.configs["identifier"])
     config : Object.create(null),
     // Tokens file path
     tokensFile: `${__dirname}/tokens.json`,
@@ -257,14 +256,16 @@ module.exports = NodeHelper.create({
     getAthleteStats: function (accessToken, athleteId) {
         this.log("Getting athlete stats for using " + athleteId);
         var moduleConfig = this.config;
+        var statsData = new Object({});
         var self = this;
         strava.athletes.stats({ "access_token": accessToken, "id": athleteId }, function (err, payload, limits) {
             if (err) {
                 self.log("Error!" +err);
-            /*} else if (limits.shortTermUsage >= 600 ||  limits.longTermUsage >= 30000) {
+            } else if (limits.shortTermUsage >= 600 ||  limits.longTermUsage >= 30000) {
                 self.log("API LIMIT EXCEEDED");
-            */} else {
-                var statsData = self.handleApiResponse(err, payload, limits);
+                self.sendSocketNotification("STATS", {});
+            } else {
+                statsData = self.handleApiResponse(err, payload, limits);
                 //self.log("Stats: "+JSON.stringify(statsData));
                 if (statsData) {
                     for (var value in statsData) {
@@ -329,6 +330,7 @@ module.exports = NodeHelper.create({
             } else if ((limits) && (limits.shortTermUsage >= 600 ||  limits.longTermUsage >= 30000)) {
                 self.log("API LIMIT EXCEEDED");
                 self.sendSocketNotification("ACTIVITIES", self.activityList);
+                self.getSegments(accessToken);
             } else {
                 var activities = self.handleApiResponse(err, payload, limits);
                 if (activities) {
@@ -407,7 +409,7 @@ module.exports = NodeHelper.create({
                 if (err) {
                   resolve("Error!");
                 } else if ((limits) && (limits.shortTermUsage >= 600 ||  limits.longTermUsage >= 30000)) {
-                    console.log("API LIMIT EXCEEDED while fetching activity details");
+                    self.log("API LIMIT EXCEEDED while fetching activity details");
                     resolve("API_LIMIT");
                 } else {
                   //console.log("Checking Activity: " + id);
@@ -505,7 +507,6 @@ module.exports = NodeHelper.create({
             //self.sendSocketNotification("SEGMENTS", this.segmentList);
             self.sendSocketNotification("RECORDS", self.records);
             self.getCrowns(accessToken, segIDs);
-            self.log("API-Counter after getSegment: "+self.apiCounter);
         })
         .catch( error => console.log("Something went wrong while searching activities for segments: " +error ));
     },
@@ -534,7 +535,11 @@ module.exports = NodeHelper.create({
                 if (segmentLeaderboard) {
                     //self.log("Leaderboard: "+JSON.stringify(segmentLeaderboard));
                     if (segmentLeaderboard.entries.length == 2) {
-                      entry.rank = segmentLeaderboard.entries[1].rank;
+                      if (entry.rank !== segmentLeaderboard.entries[1].rank) {
+                        entry.prevRank = entry.rank;
+                        entry.rank !== segmentLeaderboard.entries[1].rank;
+                        entry.date = moment().format("x");
+                      }
                       entry.time = segmentLeaderboard.entries[1].elapsed_time;
                       entry.diff = (segmentLeaderboard.entries[0].elapsed_time - entry.time);
                       entry.date = segmentLeaderboard.entries[1].start_date_local;
@@ -604,7 +609,6 @@ module.exports = NodeHelper.create({
               });
             }
             self.sendSocketNotification("CROWNS", rankings);
-            self.log("API-Counter after crowns: "+self.apiCounter);
         }).catch(error => console.log("Something went wrong while fetching crowns: " +error));
     },
 
@@ -638,7 +642,7 @@ module.exports = NodeHelper.create({
         }
         // Strava Data
         if (payload) {
-            if (limits) { this.log("API Call #"+limits.shortTermUsage+", "+limits.longTermUsage); }
+            //if (limits) { this.log("API Call #"+limits.shortTermUsage+", "+limits.longTermUsage); }
             return payload;
         }
         // Unknown response
@@ -646,53 +650,6 @@ module.exports = NodeHelper.create({
         return false;
     },
 
-    /**
-     * @function summariseActivities
-     * @description summarises a list of activities for display in the chart.
-     *
-       */
-    summariseActivities: function (activityList) {
-        this.log("Summarising athlete activities");
-        var moduleConfig = this.config;
-        var activitySummary = Object.create(null);
-        var activityName;
-        // Initialise activity summary
-        var periodIntervals = moduleConfig.period === "ytd" ? moment.monthsShort() : moment.weekdaysShort();
-        for (var activity in moduleConfig.activities) {
-            if (moduleConfig.activities.hasOwnProperty(activity)) {
-                activityName = moduleConfig.activities[activity].toLowerCase();
-                activitySummary[activityName] = {
-                    total_distance: 0,
-                    total_elevation_gain: 0,
-                    total_moving_time: 0,
-                    max_interval_distance: 0,
-                    intervals: Array(periodIntervals.length).fill(0)
-                };
-            }
-        }
-        // Summarise activity totals and interval totals
-        for (var i = 0; i < Object.keys(activityList).length; i++) {
-            // Merge virtual activities
-            activityName = activityList[i].type.toLowerCase().replace("virtual");
-            var activityTypeSummary = activitySummary[activityName];
-            // Update activity summaries
-            if (activityTypeSummary) {
-                var distance = activityList[i].distance;
-                activityTypeSummary.total_distance += distance;
-                activityTypeSummary.total_elevation_gain += activityList[i].total_elevation_gain;
-                activityTypeSummary.total_moving_time += activityList[i].moving_time;
-                const activityDate = moment(activityList[i].start_date_local);
-                const intervalIndex = moduleConfig.period === "ytd" ? activityDate.month() : activityDate.weekday();
-                activityTypeSummary.intervals[intervalIndex] += distance;
-                // Update max interval distance
-                if (activityTypeSummary.intervals[intervalIndex] > activityTypeSummary.max_interval_distance) {
-                    activityTypeSummary.max_interval_distance = activityTypeSummary.intervals[intervalIndex];
-                }
-            }
-        }
-        this.log("Summary: "+JSON.stringify(activitySummary));
-        return activitySummary;
-    },
     /**
      * @function saveToken
      * @description save token for specified client id to file

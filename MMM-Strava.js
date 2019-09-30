@@ -20,12 +20,12 @@ Module.register("MMM-Strava", {
         activities: ["ride", "run", "swim"],            // Possible values "ride", "run", "swim"
         period: "recent",                               // Possible values "recent", "ytd", "all"
         stats: ["count", "distance", "pace", "achievements"],   // Possible values "count", "distance", "pace", "elevation", "moving_time", "elapsed_time", "achievements"
-        auto_rotate: false,                             // Rotate stats through each period starting from specified period
+        auto_rotate: true,                              // Rotate stats through each period starting from specified period
         locale: config.language,
         units: config.units,
         fetchInterval: 15 * 60 * 1000,                  // every 15 minutes
         updateInterval: 2 * 60 * 1000,                 // 2 minutes
-        animationSpeed: 2.5 * 1000,                     // 2.5 seconds
+        animationSpeed: 1 * 1000,                     // 2.5 seconds
         runningGoal: 750,
         showProgressBar: false,
         shownPB: "ride",                                //will revolve between all progressbars with a goal
@@ -35,13 +35,19 @@ Module.register("MMM-Strava", {
           "swim": 0,
         },
         showCrowns: true,
-        showRecords: true,
+        showRecords: false,
         distances: {
           "400m": 400,
           "1k": 1000,
           "5k": 5000,
           "10k": 10000,
           "HM": 21097,
+        },
+        showYearlies: false,
+        interval: {
+          show: true,
+          activities: ["Run", "Ride"],
+          name: "year"
         },
         debug: true,                                    // Set to true to enable extending logging
     },
@@ -68,7 +74,9 @@ Module.register("MMM-Strava", {
     getScripts: function() {
         return [
           "moment.js",
-          "modules/MMM-Strava/node_modules/moment-duration-format/lib/moment-duration-format.js"
+          "modules/MMM-Strava/node_modules/moment-duration-format/lib/moment-duration-format.js",
+          "modules/MMM-Strava/node_modules/chart.js/dist/Chart.bundle.js",
+          "modules/MMM-Strava/node_modules/lodash/core.js"
         ];
     },
     /**
@@ -105,35 +113,27 @@ Module.register("MMM-Strava", {
     socketNotificationReceived: function(notification, payload) {
         this.log(`Receiving notification: ${notification}`);
         if (notification === "STATS") {
-            this.stats = payload;
+            if (!_.isEmpty(payload)) { this.stats = payload; }
             //this.log("Athlete stats: "+JSON.stringify(this.stats));
-            //this.loading = false;
             //this.updateDom(this.config.animationSpeed);
         } else if (notification === "ACTIVITIES") {
             this.activityList = payload;
             //this.log("Athlete activities: "+JSON.stringify(this.activityList));
             this.yearlies = this.getYearlies(this.activityList);
+            //this.drawYearliesChart(this.yearlies);
             //this.weeklyScore = this.getWeeklyScore(this.activityList);
-            //this.loading = false;
         } else if (notification === "CROWNS") {
             this.rankings = payload;
-            this.log("Received Rankings: "+JSON.stringify(this.rankings));
-            //this.updateDom(this.config.animatonSpeed);
+            this.log("Received Rankings: "+this.rankings);
+            this.loading = false;
         } else if (notification === "RECORDS") {
             this.records = payload;
-            this.log("Received Records: "+JSON.stringify(this.records));
-            //this.updateDom(this.config.animatonSpeed);
+            //this.log("Received Records: "+this.records);
         } else if (notification === "ERROR") {
             //this.loading = false;
             this.error = payload.data.message;
-            this.updateDom(this.config.animationSpeed);
         } else if (notification === "WARNING") {
-            //this.loading = false;
             this.sendNotification("SHOW_ALERT", {type: "notification", title: payload.data.message});
-        }
-        if (this.stats && this.activityList && this.rankings) {
-          this.loading = false;
-          this.updateDom(this.config.animatonSpeed);
         }
     },
 
@@ -146,9 +146,6 @@ Module.register("MMM-Strava", {
     getTemplateData: function() {
         moment.locale(this.config.language);
         this.log("Updating template data");
-        //this.log("Act: "+this.activityList);
-        //this.log("Stats: "+this.stats);
-        //this.log("Ranks: "+this.rankings);
         return {
             config: this.config,
             loading: this.loading,
@@ -157,7 +154,7 @@ Module.register("MMM-Strava", {
             activities: this.activityList || {},
             chart: {bars: this.config.period === "ytd" ? moment.monthsShort() : moment.weekdaysShort() },
             rankings: this.rankings || {},
-            records: this.records || {}
+            records: this.records || {},
             /*progressBar: {
                 "run": this.addMeasure(this.stats.ytd_run_totals.distance || 0, "run"),
                 "ride": this.addMeasure(this.stats.ytd_ride_totals.distance || 0, "ride"),
@@ -167,19 +164,24 @@ Module.register("MMM-Strava", {
     },
 
 
+
+
     scheduleUpdates: function() {
         var self = this;
-        // Schedule table rotation
-        if (!this.rotating && this.config.mode === "table") {
-            this.rotating = true;
-            if (this.config.auto_rotate && this.config.updateInterval) {
-                setInterval(function() {
-                    // Get next period
-                    self.config.period = ((self.config.period === "recent") ? "ytd" : ((self.config.period === "ytd") ? "all" : "recent"));
-                    self.config.shownPB = ((self.config.shownPB === "ride" && self.config.goals.run) ? "run" : ((self.config.shownPB === "run" && self.config.goals.swim) ? "swim" : "ride"));
-                    self.updateDom(self.config.animationSpeed);
-                }, this.config.updateInterval);
-            }
+        var toggler = 0;
+        // Schedule module rotation
+        if (this.config.auto_rotate && this.config.updateInterval) {
+          setInterval(function() {
+            // Get next period
+            self.config.period = ((self.config.period === "recent") ? "ytd" : ((self.config.period === "ytd") ? "all" : "recent"));
+            self.config.shownPB = ((self.config.shownPB === "ride" && self.config.goals.run) ? "run" : ((self.config.shownPB === "run" && self.config.goals.swim) ? "swim" : "ride"));
+            self.updateDom(self.config.animationSpeed);
+            setTimeout(function() {
+              var int = self.config.interval;
+              self.createBarChart(int.activities[toggler % int.activities.length], int.name);
+            }, 2000);
+            toggler = (toggler == 9) ? 0 : toggler + 1;
+          }, this.config.updateInterval);
         }
     },
 
@@ -336,6 +338,32 @@ Module.register("MMM-Strava", {
       return(yearlies);
     },
 
+    drawYearliesChart: function(yearlies) {
+      //var yearliesChart = new Chart();
+      var yChartData = {};
+      yChartData.labels = [];
+      yChartData.datasets = [];
+      for (var y in yearlies.Run) {
+        var sData = [];
+        for (var d in yearlies.Run[y]) {
+          sData.push({
+            x: d,
+            y: yearlies.Run[y][d],
+          });
+        }
+        this.log("sdata: "+JSON.stringify(sData));
+        yChartData.datasets.push({
+          label: y,
+          data: sData,
+          showLine: true,
+          fill: false,
+          bordercolor: 'rgba(0, 200, 0, 1)',
+        });
+        this.log("yChartData: "+JSON.stringify(yChartData));
+      }
+    },
+
+
     getWeeklyScore: function(activityList) {
       var weeklyScore = [];
       var firstWeek = moment().subtract(13, 'weeks').startOf('week');
@@ -351,5 +379,84 @@ Module.register("MMM-Strava", {
         this.weeklyScore[(moment(act.start_date_local).week() - moment(firstWeek).week())] += act.suffer_score;
       }
       console.log("Weeklies: "+this.weeklyScore);
+    },
+
+
+    createBarChart: function(actType, interval) {
+      var startDate = (interval == "week") ? moment().subtract(6, "days").startOf("day") : moment().subtract(11, "months").startOf("month");
+      //this.log("Start Date for bars: "+startDate.format());
+      var bgActivities = this.activityList.filter(function (item) {
+        return((item.type == actType) && (moment(item.start_date_local) > startDate));
+      });
+      //this.log("bgActivities: "+JSON.stringify(bgActivities));
+
+      var labels = [];
+      var values = [];
+      var dateLabel = startDate.clone();
+      while (dateLabel < moment()) {
+        if (interval == "week") {
+          labels.push(dateLabel.format("dd"));
+          dateLabel = dateLabel.add(1, "days");
+        } else if (interval == "year") {
+          labels.push(dateLabel.format("MMM"));
+          dateLabel = dateLabel.add(1, "months");
+        }
+        values.push(0);
+      }
+      //this.log("DateLabels: "+labels);
+
+      for (i = 0; i < bgActivities.length; i++) {
+        if (interval == "week") {
+          values[moment(bgActivities[i].start_date_local).diff(startDate, 'days')] += (bgActivities[i].distance/1000);
+        } else {
+          values[moment(bgActivities[i].start_date_local).diff(startDate, 'months')] += (bgActivities[i].distance/1000);
+        }
+      }
+      //this.log("Values: "+values);
+
+      var intChart = document.getElementById("intervalChart");
+      intChart.style.display = "block";
+      intChart.height = 300;
+      intChart.width = 300;
+      var ctx = intChart.getContext("2d");
+      var barChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              backgroundColor: 'rgba(0, 0, 0, 0.1)',
+              data: values,
+              borderColor: 'rgba(200, 200, 200, 0.8)', /*function (context) {
+                var index = context.dataIndex;
+                return (index == context.data.length-1) ? 'rgba(173, 216, 230, 1)' : 'rgba(200, 200, 200, 0.8)';
+              },*/
+              borderWidth: 1,
+              label: labels
+            }
+          ]
+        },
+        options: {
+          scales: {
+            yAxes: [{
+              ticks: {
+                beginAtZero: true
+              }
+            }],
+            xAxes: [{
+              ticks: {
+                fontSize: 22,
+              }
+            }]
+          },
+          responsive: false,
+          legend: { display: false },
+          title: {
+            display: true,
+            text: "Last 7 days"
+          },
+        }
+      });
+      intChart.datasets[0].bars[intChart.datasets[0].bars.length-1].borderColor = 'rgba(173, 216, 230, 1)';
     }
 });
