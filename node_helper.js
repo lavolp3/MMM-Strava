@@ -535,7 +535,11 @@ module.exports = NodeHelper.create({
                 if (segmentLeaderboard) {
                     //self.log("Leaderboard: "+JSON.stringify(segmentLeaderboard));
                     if (segmentLeaderboard.entries.length == 2) {
-                      entry.rank = segmentLeaderboard.entries[1].rank;
+                      if (entry.rank !== segmentLeaderboard.entries[1].rank) {
+                        entry.prevRank = entry.rank;
+                        entry.rank !== segmentLeaderboard.entries[1].rank;
+                        entry.date = moment().format("x");
+                      }
                       entry.time = segmentLeaderboard.entries[1].elapsed_time;
                       entry.diff = (segmentLeaderboard.entries[0].elapsed_time - entry.time);
                       entry.date = segmentLeaderboard.entries[1].start_date_local;
