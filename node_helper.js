@@ -7,36 +7,15 @@
  * @see  http://github.com/ianperrin/MMM-Strava
  */
 
-/**
- * @external node_helper
- * @see https://github.com/MichMich/MagicMirror/blob/master/modules/node_modules/node_helper/index.js
- */
 const NodeHelper = require("node_helper");
-/**
- * @external moment
- * @see https://www.npmjs.com/package/moment
- */
+
 const moment = require("moment");
-/**
- * @external strava-v3
- * @see https://www.npmjs.com/package/strava-v3
- */
+var _ = require("lodash");
+
 const strava = require("./strava_api.js");
 
-/**
- * @alias fs
- * @see {@link http://nodejs.org/api/fs.html File System}
- */
 const fs = require("fs");
-/**
- * @module node_helper
- * @description Backend for the module to query data from the API provider.
- *
- * @requires external:node_helper
- * @requires external:moment
- * @requires external:strava-v3
- * @requires alias:fs
- */
+
 module.exports = NodeHelper.create({
     /**
      * @function start
@@ -53,14 +32,14 @@ module.exports = NodeHelper.create({
     config : Object.create(null),
     // Tokens file path
     tokensFile: `${__dirname}/tokens.json`,
-    activitiesFile: `${__dirname}/cache/activities.json`,
-    segmentsFile: `${__dirname}/cache/segments.json`,
-    recordsFile: `${__dirname}/cache/records.json`,
+    activitiesFile: `${__dirname}/public/activities.json`,
+    segmentsFile: `${__dirname}/public/segments.json`,
+    recordsFile: `${__dirname}/public/records.json`,
     activityList: [],
     segmentList: [],
     crownCounter: 0,
     actCounter: 0,
-    apiCounter: 0,
+    apiLimitExceeded: false,
 
     // Token store e.g. this.tokens["client_id"])
     tokens: Object.create(null),
@@ -226,7 +205,6 @@ module.exports = NodeHelper.create({
      */
     getData: function () {
         this.log(`Getting data at ` + moment().format("DD/MM HH:mm"));
-        this.apiCounter = 0;
         const moduleConfig = this.config;
 
         try {
@@ -290,7 +268,6 @@ module.exports = NodeHelper.create({
                     self.sendSocketNotification("STATS", statsData);
                 }
             }
-            self.apiCounter++;
         });
     },
 
@@ -329,12 +306,14 @@ module.exports = NodeHelper.create({
                 self.log("Error!" +err);
             } else if ((limits) && (limits.shortTermUsage >= 600 ||  limits.longTermUsage >= 30000)) {
                 self.log("API LIMIT EXCEEDED");
+                self.apiLimitExceeded = true;
                 self.sendSocketNotification("ACTIVITIES", self.activityList);
                 self.getSegments(accessToken);
             } else {
                 var activities = self.handleApiResponse(err, payload, limits);
                 if (activities) {
-                    console.log(activities.length + " Activities found");
+                    self.apiLimitExceeded = false;
+                    self.log(activities.length + " Activities found");
                     self.activityList = self.activityList.concat(activities);
                     //self.activityList.sort(function (a, b) { return moment(a.start_date).clone().format("x") - moment(b.start_date).clone().format("x");});
                     if (activities.length == 200) {
@@ -342,30 +321,24 @@ module.exports = NodeHelper.create({
                         page = page + 1;
                         self.getAthleteActivities(accessToken, page);
                     } else {
-                        console.log("Fetched " + self.activityList.length + " Activities!");
+                        self.log("Fetched " + self.activityList.length + " Activities!");
                         for (i = 0; (i < self.activityList.length); i++) {
                             delete self.activityList[i].map;
                         }
                         self.sendSocketNotification("ACTIVITIES", self.activityList);
                         self.getSegments(accessToken);
                     }
-                //old module
-                /*var data = {
-                    "identifier": moduleIdentifier,
-                    "data": self.summariseActivities(moduleIdentifier, activityList),
-                };*/
-              } else {
-                self.sendSocketNotification("ACTIVITIES", self.activityList);
-                self.getSegments(accessToken);
-              }
+                } else {
+                  self.sendSocketNotification("ACTIVITIES", self.activityList);
+                  self.getSegments(accessToken);
+                }
             }
-            self.apiCounter++;
         });
     },
 
 
     getSegments: function (accessToken) {
-        this.log("Getting Activity Details");
+        this.log("Getting Activity Details + Segments");
         var self = this;
         var moduleConfig = this.config;
 
@@ -373,10 +346,11 @@ module.exports = NodeHelper.create({
         var segIDs = [];
         var recIDs = [];
         var apiCalls = [];
-        if (!fs.existsSync(this.segmentsFile)) {
-            console.log("Segments file not found! Will create a new one.");
-            self.segmentList = [];
-        } else {
+        if (this.segmentList == "") {
+          if (!fs.existsSync(this.segmentsFile)) {
+            this.log("Segments file not found! Will create a new one.");
+            this.segmentList = [];
+          } else {
             //try {
                 var segmentData = fs.readFileSync(this.segmentsFile, "utf8");
                 self.segmentList = JSON.parse(segmentData);
@@ -390,20 +364,23 @@ module.exports = NodeHelper.create({
                 console.log("An error occured while trying to load cached segments: "+error);
                 self.segmentList = [];
             }*/
+          }
         }
 
-        if (!fs.existsSync(this.recordsFile)) {
-            console.log("Error! Records file not found. Please perform a git pull.");
-        } else {
+        if (typeof records === 'undefined') {
+          if (!fs.existsSync(this.recordsFile)) {
+            this.log("Error! Records file not found. Please perform a git pull.");
+          } else {
             var records = fs.readFileSync(this.recordsFile, "utf8");
-            self.records = JSON.parse(records);
-            self.log("Successfully loaded records!");
-            //self.log("Records: "+JSON.stringify(self.records));
+            this.records = JSON.parse(records);
+            this.log("Successfully loaded records!");
+            //this.log("Records: "+JSON.stringify(self.records));
+          }
         }
 
         for (var i = 0; (i < this.activityList.length); i++) {
-          if (!this.activityList[i].segmentsChecked) {
-            console.log("Activity not checked yet!");
+          if (!this.activityList[i].segmentsChecked && !this.apiLimitExceeded) {
+            this.log("Checking activity "+this.activityList[i].id+", i="+i);
             apiCalls.push(new Promise((resolve, reject) => {
               strava.activities.get({ "access_token": accessToken, id: self.activityList[i].id, "include_all_efforts": true }, function (err, payload, limits) {
                 if (err) {
@@ -411,12 +388,14 @@ module.exports = NodeHelper.create({
                 } else if ((limits) && (limits.shortTermUsage >= 600 ||  limits.longTermUsage >= 30000)) {
                     self.log("API LIMIT EXCEEDED while fetching activity details");
                     resolve("API_LIMIT");
+                    self.apiLimitExceeded = true;
                 } else {
+                  self.apiLimitExceeded = false;
                   //console.log("Checking Activity: " + id);
                   var activity = self.handleApiResponse(err, payload, limits);
 
                   if (activity && activity.segment_efforts.length && !activity.private) {
-                    //self.log("Activity "+activity.id+": "+activity.segment_efforts.length + " Segments found!");
+                    self.log("Activity "+activity.id+": "+activity.segment_efforts.length + " Segments found!");
                     for (var j = 0; j < activity.segment_efforts.length; j++) {
                       var currentID = activity.segment_efforts[j].segment.id;
                       if (!segIDs.includes(currentID)) {
@@ -442,7 +421,7 @@ module.exports = NodeHelper.create({
                   // record best efforts of the activity
                   if (activity.best_efforts) {
                     for (var k = 0; k < activity.best_efforts.length; k++) {
-                      //console.log(JSON.stringify(activity.best_efforts[k]));
+                      //console.log("Best efforts: "+JSON.stringify(activity.best_efforts[k]));
                       if (activity.best_efforts[k].hasOwnProperty("distance")) {
                         effort = activity.best_efforts[k].distance;
                       }
@@ -476,13 +455,13 @@ module.exports = NodeHelper.create({
                   }
 
                   var actIndex = self.activityList.findIndex(element => { return element.id == activity.id; });
-                  self.log("ActIndex: "+actIndex);
                   if (actIndex > -1) {self.activityList[actIndex].segmentsChecked = true; }
                   resolve(activity.id);
                 }
               });
-              self.apiCounter++;
             }));
+          } else if (this.apiLimitExceeded) {
+            this.log("Omitting segment check because API limit has been reached");
           }
         }
 
@@ -504,7 +483,7 @@ module.exports = NodeHelper.create({
               });
             }
 
-            //self.sendSocketNotification("SEGMENTS", this.segmentList);
+            //self.sendSocketNotification("SEGMENTS", self.segmentList);
             self.sendSocketNotification("RECORDS", self.records);
             self.getCrowns(accessToken, segIDs);
         })
@@ -521,39 +500,37 @@ module.exports = NodeHelper.create({
         var self = this;
         var cc = (this.crownCounter * 100 < this.segmentList.length) ? this.crownCounter : 0;
         for (var s = 100*cc; ((s < (100*(cc + 1))) && (s < this.segmentList.length)); s++) {
-          if (this.segmentList[s].id) {
+          if (this.segmentList[s].id && !this.apiLimitExceeded) {
           crownCalls.push(new Promise((resolve, reject) => {
             strava.segments.listLeaderboard({ "access_token": accessToken, id: self.segmentList[s].id, "context_entries": 0, "per_page": 1}, function (err, payload, limits) {
               if (err) {
                 resolve("Error!" +err);
               } else if ((limits) && (limits.shortTermUsage >= 600 ||  limits.longTermUsage >= 30000)) {
                 self.log("API LIMIT EXCEEDED");
+                self.apiLimitExceeded = true;
                 resolve("API_LIMIT");
               } else {
+                self.apiLimitExceeded = false;
                 var entry = {};
                 var segmentLeaderboard = self.handleApiResponse(err, payload, limits);
-                if (segmentLeaderboard) {
+                if (segmentLeaderboard && segmentLeaderboard.entries.length) {
                     //self.log("Leaderboard: "+JSON.stringify(segmentLeaderboard));
-                    if (segmentLeaderboard.entries.length == 2) {
-                      if (entry.rank !== segmentLeaderboard.entries[1].rank) {
-                        entry.prevRank = entry.rank;
-                        entry.rank !== segmentLeaderboard.entries[1].rank;
-                        entry.date = moment().format("x");
-                      }
-                      entry.time = segmentLeaderboard.entries[1].elapsed_time;
-                      entry.diff = (segmentLeaderboard.entries[0].elapsed_time - entry.time);
-                      entry.date = segmentLeaderboard.entries[1].start_date_local;
-                    } else {
-                      entry.rank = segmentLeaderboard.entries[0].rank;
+                    //if (segmentLeaderboard.entries.length == 2) {
+                    entry.rank = _.last(segmentLeaderboard.entries).rank;
+                    entry.time = _.last(segmentLeaderboard.entries).elapsed_time;
+                    entry.diff = segmentLeaderboard.entries[0].elapsed_time - entry.time || 0;
+                    entry.date = _.last(segmentLeaderboard.entries).start_date_local;
+                    /*} else {
                       entry.time = segmentLeaderboard.entries[0].elapsed_time;
                       entry.date = segmentLeaderboard.entries[0].start_date_local;
-                    }
+                    }*/
                     entry.efforts = segmentLeaderboard.effort_count;
+                } else {
+                  self.log("Error in segment Leaderboard entries: "+JSON.stringify(segmentLeaderboard));
                 }
                 resolve(entry);
               }
             });
-            self.apiCounter++;
           }));
           }
         }
@@ -565,12 +542,12 @@ module.exports = NodeHelper.create({
             for (var e = 0; (e < entries.length); e++) {
               var se = self.segmentList[(e + 100*cc)];
               if ((se) && (typeof entries[e] == "object")) {
-                if (se.hasOwnProperty("entry") && (se.entry.rank != entries[e].rank)) {
+                if (se.hasOwnProperty("entry") && (se.entry.rank != undefined) && (se.entry.rank != entries[e].rank)) {
+                  self.log("Entry Rank has changed for " + se.name + " from " + se.entry.rank + " to " + entries[e].rank);
                   entries[e].prevRank = se.entry.rank;
                   entries[e].date = moment();
-                  self.log("Entry Rank has changed!"+entries[e]);
                 }
-                self.segmentList[(e+100*cc)].entry = entries[e];
+                self.segmentList[(e + 100*cc)].entry = entries[e];
                 //self.log("Entry saved in segment");
               }
             }

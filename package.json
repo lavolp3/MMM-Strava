@@ -26,9 +26,11 @@
   "homepage": "https://github.com/ianperrin/MMM-Strava/#readme",
   "dependencies": {
     "chart.js": "^2.8.0",
+    "chartjs-plugin-datalabels": "^0.7.0",
     "lodash": "^4.17.15",
     "moment-duration-format": "^2.3.2",
-    "strava-v3": "1.14.0"
+    "strava-v3": "1.14.0",
+    "underscore": "^1.9.1"
   },
   "devDependencies": {
     "grunt": "latest",
