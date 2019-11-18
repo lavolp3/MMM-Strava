@@ -7,9 +7,9 @@
     {{ error | safe }}
   </div>
 {% else %}
-  <div class="wrapper" style="grid-template-columns: repeat({{ config.gridColumns }}, 350px); grid-auto-rows: 300px">
+  <div class="wrapper" style="grid-template-columns: repeat({{ config.gridColumns }}, 350px); grid-template-rows: repeat({{ config.gridRows}}, 300px)">
     {% if config.statsTable.show %}
-      <div class="box small">
+      <div class="strava-box small" id="statsTable">
         <header class="moduleHeader">Statistics</header>
         <table class="small">
         <thead>
@@ -87,7 +87,7 @@
 
     {% if config.progressBar.show %}
       {% set pbAct = config.shownPB %}
-      <div class="box small progressbar">
+      <div class="strava-box small" id="progressBar">
         <header class="moduleHeader">Yearly Progress</header>
         <svg class="progressSVG" xmlns="http://www.w3.org/2000/svg" height="300" width="300" viewBox="0 0 300 300" data-value="50">
           <g class="strava-icon icon-run">
@@ -105,7 +105,7 @@
     {% endif %}
 
     {% if config.crowns.show %}
-      <div class="box small crownTables">
+      <div class="strava-box small" id="crowns">
         <header class="moduleHeader">Crowns</header>
         <div class="small runCrowns">
           <table class="crownTable">
@@ -145,10 +145,10 @@
     {% endif %}
 
     {% if config.records.show %}
-      <div class="box small">
-        <header class="moduleHeader">Best Efforts</th>
+      <div class="strava-box small" id="records">
+        <header class="moduleHeader">Best Efforts</header>
         <table>
-          {% for name, dist in config.distances %}
+          {% for name, dist in config.records.distances %}
           <tr>
             <td class="recordHeader">{{ name }}</td>
             <td class="recordContent">
@@ -162,15 +162,18 @@
     {% endif %}
 
     {% if config.yearlies.show %}
-      <div class="box">
+      <div class="strava-box toggler chartWrapper intervalBox" id="yearlies">
         <header class="moduleHeader">Yearlies</header>
-        <canvas id="yearChart">
-        </canvas>
+        <div>
+          <div class="icon-box strava-icon icon-{{config.yearlies.activities[toggler % config.yearlies.activities.length] | lower}}"></div>
+          <canvas id="yearChart">
+          </canvas>
+        </div>
       </div>
     {% endif %}
 
     {% if config.interval.show %}
-      <div class="box chartWrapper intervalBox">
+      <div class="strava-box chartWrapper intervalBox" id="interval">
         <header class="moduleHeader">Interval distances: {{ config.interval.name }}ly</header>
         <div>
           <div class="icon-box strava-icon icon-{{config.interval.activities[toggler % config.interval.activities.length] | lower}}"></div>
@@ -181,7 +184,7 @@
     {% endif %}
 
     {% if config.relativeEffort.show %}
-      <div class="box chartWrapper">
+      <div class="strava-box chartWrapper" id="relativeEffort">
         <header class="moduleHeader">Weekly Effort</header>
         <canvas id="weeklyChart">
         </canvas>
@@ -189,7 +192,7 @@
     {% endif %}
 
     {% if config.recent.show %}
-      <div class="box Wrapper">
+      <div class="strava-box Wrapper" id="recent">
         <header class="moduleHeader">Recent Activities</header>
         <div class="recent-wrapper small">
 

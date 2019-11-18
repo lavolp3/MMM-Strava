@@ -1,10 +1,10 @@
 /**
  * @file MMM-Strava.js
  *
- * @author ianperrin
+ * @author lavolp3 & ianperrin
  * @license MIT
  *
- * @see  https://github.com/ianperrin/MMM-Strava
+ * @see  https://github.com/lavolp3/MMM-Strava
  */
 
 /* global Module, config, Log, moment */
@@ -22,8 +22,9 @@ Module.register("MMM-Strava", {
         fetchInterval: 15 * 60 * 1000,                 //every 15 minutes
         pauseFetching: [0, 7],                         // pause during night
         updateInterval: 2 * 60 * 1000,                 // 2 minutes
-        animationSpeed: 1 * 1000,                      // 2.5 seconds
+        animationSpeed: 0 * 1000,                      // 2.5 seconds
         gridColumns: 3,
+        gridRows: 1,
         subModules: {
           "statsTable": 1,
           "crowns": 1,
@@ -92,7 +93,8 @@ Module.register("MMM-Strava", {
      * @member {boolean} rotating - Flag to indicate the rotating state of the module.
      */
     rotating: false,
-    toggler: -1,		//toggler will count from 0 to 9 with every dom update and define the activity to show for every sub-module (see this.scheduleupdates)
+    showModules: [],
+    actToggler: 0,		//toggler will count from 0 to 9 with every dom update and define the activity to show for every sub-module (see this.scheduleupdates)
     activityList: [],
     segmentList: [],
     stats: [],
@@ -135,18 +137,16 @@ Module.register("MMM-Strava", {
         // Validate config
         this.config.period = this.config.period.toLowerCase();
         //set visibility of chosen subModules
-        this.log(this.config.submodules);
         for (var mod in this.config.subModules) {
           if (this.config.subModules[mod] == 1) {
-            if (this.config[mod]) {
-              this.config[mod].show = true;
-            } else {
-              this.log("ERROR: Submodule does not exist: "+mod);
-            }
+            this.config[mod].show = true;
+            this.showModules.push(mod);
           }
         }
+        this.log(this.showModules);
         // Add custom filters
         this.addFilters();
+        //Unregister datalabels plugin, else every chart on the mirror would show datalabels automagically
         Chart.plugins.unregister(ChartDataLabels);
         // Initialise helper and schedule api calls
         this.log("Sending socket notification GET_DATA");
@@ -192,18 +192,18 @@ Module.register("MMM-Strava", {
         });
         moment.locale(this.config.language);
         this.log("Updating template data");
-        this.log("Toggler: "+this.toggler);
+        //this.log("Toggler: "+this.actToggler);
         return {
             config: this.config,
             loading: this.loading,
-            toggler: this.toggler,
+            toggler: this.actToggler,
+            showModules: this.showModules,
             error: this.error || null,
             stats: this.stats || {},
             activities: this.activityList || {},
-            chart: {bars: this.config.period === "ytd" ? moment.monthsShort() : moment.weekdaysShort() },
             rankings: this.rankings || {},
             records: this.records || {},
-            recent: (this.activityList.length) ? this.prepareRecent(this.activityList, this.config.recent.activities[this.toggler % this.config.recent.activities.length]) : {},
+            recent: (this.activityList.length) ? this.prepareRecent(this.activityList, this.config.recent.activities[this.actToggler % this.config.recent.activities.length]) : {},
             /*progressBar: {
                 "run": this.addMeasure(this.stats.ytd_run_totals.distance || 0, "run"),
                 "ride": this.addMeasure(this.stats.ytd_ride_totals.distance || 0, "ride"),
@@ -216,28 +216,48 @@ Module.register("MMM-Strava", {
 
 
     scheduleUpdates: function() {
-        var self = this;
-        // Schedule module rotation
-        if (this.config.auto_rotate && this.config.updateInterval) {
-          setInterval(function() {
-            var int = self.config.interval;
-            self.toggler = (self.toggler == 9) ? 0 : self.toggler + 1;
-            self.config.period = self.config.statsTable.periods[self.toggler % self.config.statsTable.periods.length];
-            //self.config.progressBar.shownPB = ((self.config.pogressBar.shownPB === "ride" && self.config.progressBar.goals.run) ? "run" : ((self.config.shownPB === "run" && self.config.goals.swim) ? "swim" : "ride"));
-            self.updateDom(self.config.animationSpeed)
-            /*.then(function() {
-              self.createBarChart(int.activities[toggler % int.activities.length], int.name);
-              self.createWeeklyEffortChart(self.activityList);
-              self.createYearliesChart("Run", self.activityList);
-            })*/
-            ;
-            setTimeout(function() {
-              self.createBarChart(int.activities[self.toggler % int.activities.length], int.name);
-              self.createWeeklyEffortChart(self.activityList);
-              self.createYearliesChart("Run", self.activityList);
-            }, 2000);
-          }, this.config.updateInterval);
+      var showStart = 0;
+      var maxPages = Math.ceil(this.showModules.length / this.config.gridColumns);
+      console.log("MaxPages: "+maxPages);
+      var pageToggler = -1;
+      var self = this;
+
+      // Schedule module and page rotation
+      setInterval(function() {
+        var conf = self.config;
+        if (pageToggler === (maxPages - 1)) {
+          self.actToggler = (self.actToggler == 9) ? 0 : self.actToggler + 1;
+          pageToggler = 0;
+        } else {
+          pageToggler++;
         }
+        console.log("ActToggler: "+self.actToggler+" pageToggler: "+pageToggler);
+        self.config.period = conf.statsTable.periods[self.actToggler % conf.statsTable.periods.length];
+        //self.config.progressBar.shownPB = ((self.config.pogressBar.shownPB === "ride" && self.config.progressBar.goals.run) ? "run" : ((self.config.shownPB === "run" && self.config.goals.swim) ? "swim" : "ride"));
+        self.updateDom(conf.animationSpeed);
+
+        setTimeout(function() {
+          self.createBarChart(conf.interval.activities[self.actToggler % conf.interval.activities.length], conf.interval.name);
+          self.createWeeklyEffortChart(self.activityList);
+          self.createYearliesChart(conf.yearlies.activities[self.actToggler % conf.yearlies.activities.length], self.activityList);
+
+          //hide all submodules
+          var hideMods = document.getElementsByClassName("strava-box");
+          console.log("HideMods: "+hideMods.length);
+          for (var m = 0; m < hideMods.length; m++) {
+            hideMods[m].style.display = "none";
+          }
+          //show selected submodules
+          showStart = pageToggler * self.config.gridColumns;
+          console.log(showStart);
+          var displayModules = self.showModules.slice(showStart, showStart + self.config.gridColumns);
+          console.log(displayModules);
+          for (m = 0; m < displayModules.length; m++) {
+            document.getElementById(displayModules[m]).style.display = "block";
+          }
+
+        }, 2000);
+      }, this.config.updateInterval);
     },
 
 
@@ -383,9 +403,7 @@ Module.register("MMM-Strava", {
       var compares = this.activityList.filter(item => {
         return(item.type == activity);
       });
-      this.log(compares.length);
       compares = compares.slice(-this.config.recent.activitiesToCompare).reverse();
-      this.log(compares.length);
       var compareStats = {
         distance: 0,
         elapsedTime: 0,
@@ -425,7 +443,7 @@ Module.register("MMM-Strava", {
         //compares: compares,
         compareStats: compareStats,
       };
-      this.log("Recent: "+JSON.stringify(recentData));
+      //this.log("Recent: "+JSON.stringify(recentData));
       return recentData;
     },
 
@@ -441,14 +459,10 @@ Module.register("MMM-Strava", {
       var year = startYear;
       var week;
       var weeklyCount = Array(moment(year, "YYYY").weeksInYear()).fill(0);
-      this.log(weeklyCount.length, weeklyCount);
-      this.log("Fetching yearly data for "+activity+" starting "+year);
-      //this.log(weeklyCount);
       var actList = activityList.filter(element =>
       {
         return ((moment(element.start_date_local).year() >= startYear) && (element.type == activity));
       });
-      //this.log(JSON.stringify(actList));
       //activityList = activityList.slice(actIndex);
 
       for (var a = 0; a < actList.length; a++) {
@@ -456,19 +470,16 @@ Module.register("MMM-Strava", {
         //first, push old values to new dataset if a new year is being started
         if (moment(actList[a].start_date_local).year() != year) {
           //console.log("New year: "+moment(activityList[a].start_date_local).year());
-          //this.log(weeklyCount);
           for (var w = 1; w < weeklyCount.length; w++) {
             weeklyCount[w] += weeklyCount[w-1];
           }
           var greyscale = 100 + 50 * (year - startYear);
           var gsString = 'rgba('+greyscale+','+greyscale+','+greyscale+', 1)';
           //console.log("WeeklyCount: "+year+" "+weeklyCount);
-          //console.log("Pushing yearly!");
           yChartData.datasets.push({
             label: year,
             data: weeklyCount,
             pointRadius: 0,
-            //showLine: true,
             fill: false,
             steppedLine: true,
             borderColor: gsString,
@@ -477,27 +488,24 @@ Module.register("MMM-Strava", {
           year = moment(actList[a].start_date_local).year();
           weeklyCount = (moment().year() === year) ? Array(moment().week()).fill(0) : Array(moment(year, "YYYY").weeksInYear()).fill(0);
         }
+
         week = moment(actList[a].start_date_local).week();
-        if ((moment(actList[a].start_date_local).dayOfYear() < 6) && (week > 51)) { week = 1; } //hack to ensure first activities in a year being in "week 1" of the year.
-        weeklyCount[week-1] += (activity === "Run") ? actList[a].distance / 1000 : actList[a].distance;
+        if ((moment(actList[a].start_date_local).dayOfYear() < 7) && (week > 51)) { week = 1; } //hack to ensure first activities in a year being in "week 1" of the year.
+        weeklyCount[week-1] += parseFloat(this.formatDistance(actList[a].distance, 2, false));
       }
-      //this.log(weeklyCount);
       if (year === thisYear) {
         for (var w = 1; w < moment().week(); w++) {
-          weeklyCount[w] += weeklyCount[w-1];
+          weeklyCount[w] += parseFloat(weeklyCount[w-1]);
         }
       } else {
         for (var w = 1; w < weeklyCount.length; w++) {
-          weeklyCount[w] += weeklyCount[w-1];
+          weeklyCount[w] += parseFloat(weeklyCount[w-1]);
         }
       }
-      //console.log("WeeklyCount: "+year+" "+weeklyCount);
-      //console.log("Pushing yearly!");
       yChartData.datasets.push({
         label: year,
         data: weeklyCount,
         pointRadius: 0,
-        //showLine: true,
         fill: false,
         steppedLine: true,
         borderColor: 'rgba(50, 200, 50, 1)',
@@ -520,9 +528,12 @@ Module.register("MMM-Strava", {
             yAxes: [{
               //display: false,
               ticks: {
+                callback: function(label, index, labels) {
+                  return Math.round(label);
+                },
                 beginAtZero: true,
-                fontSize: 20,
-                fontColor: "#DDD"
+                fontSize: 18,
+                fontColor: "#ccc"
               }
             }],
             xAxes: [{
@@ -544,19 +555,15 @@ Module.register("MMM-Strava", {
           },
         }
       });
-      //this.log(yChart);
     },
 
 
     createWeeklyEffortChart: function(activityList) {
       var weeklyScore = new Array(this.config.relativeEffort.shownWeeks).fill(0);
-      this.log("Weeklies: "+weeklyScore);
       var firstWeek = moment().subtract(this.config.relativeEffort.shownWeeks-1, 'weeks').startOf('week');
-      console.log(firstWeek.format());
       var actIndex = activityList.findIndex( element => {
         return (moment(element.start_date_local).startOf('week') >= firstWeek);
       });
-      //console.log(actIndex);
       activityList = activityList.slice(actIndex);
       var weekCount = 0;
       for (i = 0; i < activityList.length; i++) {
@@ -564,7 +571,7 @@ Module.register("MMM-Strava", {
         //console.log("WeekCount: "+weekCount);
         weeklyScore[weekCount] += activityList[i].suffer_score;
       }
-      console.log("Weeklies: "+weeklyScore);
+      this.log("Weekly Efforts: "+weeklyScore);
 
       var weeks = [];
       for (w = 0; w < weeklyScore.length; w++) {
@@ -576,10 +583,11 @@ Module.register("MMM-Strava", {
       weeklyChart.height = 250;
       weeklyChart.width = 340;
 
-      //create array for colored bar graphs, last one is blue
+      //create array for colored points, last one is blue
       var colorArray = [];
       for (var c = 0; c < (weeklyScore.length - 1); c++) { colorArray.push('rgba(200, 200, 200, 0.8)'); }
       colorArray.push('rgba(173, 216, 230, 1)');
+
 
       var ctx = weeklyChart.getContext("2d");
       var wklyChart = new Chart(ctx, {
@@ -613,7 +621,6 @@ Module.register("MMM-Strava", {
           },
           scales: {
             yAxes: [{
-              //display: false,
               ticks: {
                 suggestedMax: 400,
                 fontSize: 19,
@@ -641,8 +648,6 @@ Module.register("MMM-Strava", {
               offset: 7
             },
           },
-
-          //responsive: false,
           legend: { display: false },
           title: {
             display: false,
@@ -654,11 +659,9 @@ Module.register("MMM-Strava", {
 
     createBarChart: function(actType, interval) {
       var startDate = (interval == "week") ? moment().subtract(6, "days").startOf("day") : moment().subtract(11, "months").startOf("month");
-      //this.log("Start Date for bars: "+startDate.format());
       var bgActivities = this.activityList.filter(function (item) {
         return((item.type == actType) && (moment(item.start_date_local) > startDate));
       });
-      //this.log("bgActivities: "+JSON.stringify(bgActivities));
 
       var labels = [];
       var values = [];
@@ -673,7 +676,6 @@ Module.register("MMM-Strava", {
         }
         values.push(0);
       }
-      //this.log("DateLabels: "+labels);
 
       // summarise activity distances to weekly/monthly numbers
       for (i = 0; i < bgActivities.length; i++) {
@@ -683,13 +685,6 @@ Module.register("MMM-Strava", {
           values[moment(bgActivities[i].start_date_local).diff(startDate, 'months')] += (bgActivities[i].distance/1000);
         }
       }
-
-      //round values <- can this additional for-loop be spared?
-      /*for (i = 0; i < values.length; i++) {
-        values[i] = Math.round(values[i]);
-      }*/
-
-      //this.log("Values: "+values);
 
       var intChart = document.getElementById("intervalChart");
       intChart.style.display = "block";
@@ -701,7 +696,6 @@ Module.register("MMM-Strava", {
       for (var c = 0; c < (values.length - 1); c++) { colorArray.push('rgba(200, 200, 200, 0.8)'); }
       colorArray.push('rgba(173, 216, 230, 1)');
 
-      //Chart.plugins.register(ChartDataLabels);
       var ctx = intChart.getContext("2d");
       var barChart = new Chart(ctx, {
         type: 'bar',
@@ -721,7 +715,8 @@ Module.register("MMM-Strava", {
         options: {
           layout: {
             padding: {
-              top: 5,
+              top: 10,
+              bottom: -30
             }
           },
           scales: {
@@ -751,7 +746,6 @@ Module.register("MMM-Strava", {
               anchor: 'end',
               align: 'top',
               clip: false,
-              //offset: 5
             },
           },
           legend: {

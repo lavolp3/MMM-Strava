@@ -13,8 +13,9 @@
   margin: auto;
 }
 
-.MMM-Strava .wrapper .box {
+.MMM-Strava .wrapper .strava-box {
   width: 350px;
+  display: none;
 }
 
 .MMM-Strava .symbol {
@@ -64,7 +65,6 @@
   right: 0;
   bottom: 0;
   margin: auto;
-  color: rgba(240, 248, 255, 0.5);
 }
 
 .MMM-Strava .strava-icon.icon-lg {
