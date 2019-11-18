@@ -7,7 +7,6 @@
 <link rel="stylesheet" type="text/css" href="/fonts/roboto.css">
 <link rel="stylesheet" type="text/css" href="/modules/MMM-Strava/MMM-Strava.css">
 <link rel="stylesheet" type="text/css" href="/vendor/node_modules/font-awesome/css/font-awesome.min.css">
-
 <style>
 html {
   cursor: default;
@@ -26,7 +25,7 @@ html {
             </div>
         </div>
     </div>
-    
+
     <div class="region middle center">
         <div class="container" style="display: block;">
             <div id="module_1_MMM-Strava_Authorisation" class="module MMM-Strava-Authorisation"
@@ -85,10 +84,10 @@ var StravaAuth = {
         // Load module options
         this.get("modules", "", function(text) {
             var modules = JSON.parse(text);
-            var fieldset = document.getElementById("module_identifier"); 
+            var fieldset = document.getElementById("module_identifier");
             for(var i = 0; i < modules.length; i++) {
                 var module = modules[i];
-                
+
                 var input = document.createElement("input");
                 input.value = module;
                 input.type = "radio";

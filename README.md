@@ -41,6 +41,7 @@ A MagicMirror Module for displaying your Strava data.
    ````bash
    cd ~/MagicMirror/modules
    git clone https://github.com/ianperrin/MMM-Strava.git
+   cd MMM-Strava
    npm install --production
    ````
 
@@ -66,7 +67,13 @@ A MagicMirror Module for displaying your Strava data.
 
    The full list of config options can be found in the [configuration options](#configuration-options) table.
 
-4. Authenticate the module to allow access to the Strava API.
+4. 4. Restart the MagicMirror
+
+    ````bash
+    pm2 restart mm
+    ````
+
+5. Authenticate the module to allow access to the Strava API.
 
     * Browse to the Strava authentication page: [http://localhost:8080/MMM-Strava/auth/](http://localhost:8080/MMM-Strava/auth/) - _the exact URL may vary depending on your configuration._
     * Select the module you wish to authenticate (e.g. `module_4_MMM-Strava`) and click/tap *Authorise* -_The number of the modules will vary depending on your configuration._
@@ -87,7 +94,7 @@ To update the module to the latest version,
 
 2. Update your config file to remove the `strava_id` and `access_token` options and add the new `client_id` and `client_secret` options - *See steps 2 and 4 in the [installation notes](#installation)*.
 
-**Please Note** Following the changes to Strava’s [authentication model](https://developers.strava.com/docs/authentication/)  is available.To support the new authentication flow, the client_id and client_secret must be included in the config in place of the deprecated strava_id and access_token options. The legacy options can still be used, but will trigger an alert on the mirror when the module is loaded and it is recommended they are removed.
+**Please Note** Following the changes to Strava’s [authentication model](https://developers.strava.com/docs/authentication/), the client_id and client_secret must be included in the config in place of the deprecated strava_id and access_token options.
 
 If you haven't changed the module, this should work without any problems. If you have a problem, you can reset the module using `git reset --hard`, after which `git pull` should be possible. You may wish to use `git status` to see any changes before doing so.
 

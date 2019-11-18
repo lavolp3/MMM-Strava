@@ -12,7 +12,7 @@ const NodeHelper = require("node_helper");
 const moment = require("moment");
 var _ = require("lodash");
 
-const strava = require("./strava_api.js");
+const strava = require("strava-v3");
 
 const fs = require("fs");
 
