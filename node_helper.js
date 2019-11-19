@@ -118,8 +118,8 @@ module.exports = NodeHelper.create({
             this.log(`Requesting access for ${clientId}`);
             // Set Strava config
             strava.config({
-                "client_id"     : clientId,
-                "redirect_uri"  : redirectUri
+                "client_id": clientId,
+                "redirect_uri": redirectUri
             });
             const args = {
                 "client_id": clientId,
@@ -148,8 +148,8 @@ module.exports = NodeHelper.create({
             const clientSecret = this.config.client_secret;
             this.log(`Getting token for ${clientId}`);
             strava.config({
-                "client_id"     : clientId,
-                "client_secret"  : clientSecret
+                "client_id": clientId,
+                "client_secret": clientSecret
             });
             var self = this;
             const args = {
@@ -187,8 +187,8 @@ module.exports = NodeHelper.create({
         const token = this.tokens[args.client_id].token;
         this.log(`Refreshing token for ${clientId}`);
         strava.config({
-            "client_id"     : clientId,
-            "client_secret"  : clientSecret
+            "client_id": clientId,
+            "client_secret": clientSecret
         });
         try {
             strava.oauth.refreshToken(token.refresh_token).then(result => {
@@ -219,13 +219,13 @@ module.exports = NodeHelper.create({
 
         try {
             // Get access token
-            const accessToken = moduleConfig.access_token || this.tokens[moduleConfig.client_id].token.access_token;
+            const accessToken = this.tokens[moduleConfig.client_id].token.access_token;
 
                 try {
                     // Get athlete Id
                     this.log(moduleConfig.strava_id);
                     this.log(this.tokens[moduleConfig.client_id].token);
-                    const athleteId = moduleConfig.strava_id || this.tokens[moduleConfig.client_id].token.athlete.id;
+                    const athleteId = this.tokens[moduleConfig.client_id].token.athlete.id;
                     // Call api
                     this.getAthleteStats(accessToken, athleteId);
 
@@ -379,7 +379,7 @@ module.exports = NodeHelper.create({
           }
         }
 
-        if (typeof records === 'undefined') {
+        if (typeof this.records === 'undefined') {
           if (!fs.existsSync(this.recordsFile)) {
             this.log("Error! Records file not found. Please perform a git pull.");
           } else {
@@ -612,30 +612,24 @@ module.exports = NodeHelper.create({
      * @param {Object} limits
      */
     handleApiResponse: function (err, payload, limits) {
-        // Strava-v3 package errors
-        if (err) {
-            this.log(err);
-            this.sendSocketNotification("ERROR", err.msg);
-            return false;
-        }
-        // Strava API "fault"
-        if (payload && payload.hasOwnProperty("message") && payload.hasOwnProperty("errors")) {
-            this.log("STRAVA API Error: "+JSON.stringify(payload));
-            if (payload.errors[0] && payload.errors[0].field === "access_token" && payload.errors[0].code === "invalid") {
-                this.refreshTokens();
-            } else {
-                this.log(payload.errors);
-                //this.sendSocketNotification("ERROR", payload);
+        try {
+            // Strava-v3 errors
+            if (err) {
+                if (err.error && err.error.errors[0].field === "access_token" && err.error.errors[0].code === "invalid") {
+                    this.refreshTokens();
+                } else {
+                    this.log({ error: err });
+                    this.sendSocketNotification("ERROR", { "data": { "message": err.message } });
+                }
             }
-            return false;
+            // Strava Data
+            if (payload) {
+               return payload;
+            }
+        } catch (error) {
+             // Unknown response
+             this.log(`Unable to handle API response!`);
         }
-        // Strava Data
-        if (payload) {
-            //if (limits) { this.log("API Call #"+limits.shortTermUsage+", "+limits.longTermUsage); }
-            return payload;
-        }
-        // Unknown response
-        this.log(`Unable to handle API response`);
         return false;
     },
 
