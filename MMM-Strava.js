@@ -173,8 +173,9 @@ Module.register("MMM-Strava", {
             this.records = payload;
             //this.log("Received Records: "+this.records);
         } else if (notification === "ERROR") {
-            //this.loading = false;
+            this.loading = false;
             this.error = payload.data.message;
+            this.updateDom(this.config.animationSpeed);
         } else if (notification === "WARNING") {
             this.sendNotification("SHOW_ALERT", {type: "notification", title: payload.data.message});
         }

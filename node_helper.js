@@ -29,7 +29,7 @@ module.exports = NodeHelper.create({
     // Set the minimum MagicMirror module version for this module.
     requiresVersion: "2.2.0",
     config : Object.create(null),
-    // Tokens file path
+    // File paths
     tokensFile: `${__dirname}/tokens.json`,
     activitiesFile: `${__dirname}/public/activities.json`,
     segmentsFile: `${__dirname}/public/segments.json`,
@@ -50,23 +50,25 @@ module.exports = NodeHelper.create({
      * @override
      *
      * @param {string} notification - Notification name
-     * @param {Object.<string, Object>} payload - Detailed payload of the notification (key: module identifier, value: config object).
+     * @param {Object.<string, Object>} payload - Detailed payload of the notification (config object).
      */
     socketNotificationReceived: function (notification, payload) {
         var self = this;
         this.log("Received notification: " + notification);
         if (notification === "GET_STRAVA_DATA") {
-            this.readTokens();
             // Validate module config
             if (payload.access_token || payload.strava_id) {
                 this.log(`Legacy config in use`);
                 this.sendSocketNotification("WARNING", {"data": { message: "Strava authorisation has changed. Please update your config." } });
             }
             this.config = payload;
+            this.readTokens();
             // Check for token authorisations
             if (payload.client_id && (!(payload.client_id in this.tokens))) {
                 this.log(`Unauthorised client id`);
                 this.sendSocketNotification("ERROR", { "data": { message: `Client id unauthorised - please visit <a href="/${self.name}/auth/">/${self.name}/auth/</a>` } });
+            } else if (this.tokens[payload.client_id].expires_at < moment().format("X")) {
+                this.refreshTokens()
             }
             // Schedule API calls
             this.getData();
@@ -95,7 +97,7 @@ module.exports = NodeHelper.create({
      */
     authModulesRoute: function (req, res) {
         try {
-            var identifier = this.config;
+            var identifier = ['MMM-Strava_Module'];
             var text = JSON.stringify(identifier);
             res.contentType("application/json");
             res.send(text);
@@ -152,11 +154,7 @@ module.exports = NodeHelper.create({
                 "client_secret": clientSecret
             });
             var self = this;
-            const args = {
-                client_id: clientId,
-                client_secret: clientSecret
-            };
-            strava.oauth.getToken(args, authCode, function (err, payload, limits) {
+            strava.oauth.getToken(authCode, function (err, payload, limits) {
                 if (err) {
                     console.error(err);
                     res.redirect(`/${self.name}/auth/?error=${err}`);
@@ -180,11 +178,10 @@ module.exports = NodeHelper.create({
      *
      */
     refreshTokens: function () {
-        this.log(`Refreshing tokens`);
         var self = this;
         const clientId = this.config.client_id;
         const clientSecret = this.config.client_secret;
-        const token = this.tokens[args.client_id].token;
+        const token = this.tokens[clientId].token;
         this.log(`Refreshing token for ${clientId}`);
         strava.config({
             "client_id": clientId,
@@ -204,7 +201,7 @@ module.exports = NodeHelper.create({
                 });
             });
         } catch (error) {
-            this.log(`Failed to refresh tokens for ${moduleIdentifier}. Check config or module authorisation.`);
+            this.log(`Failed to refresh tokens. Check config or module authorisation.`);
         }
     },
 
@@ -220,38 +217,34 @@ module.exports = NodeHelper.create({
         try {
             // Get access token
             const accessToken = this.tokens[moduleConfig.client_id].token.access_token;
-
                 try {
                     // Get athlete Id
-                    this.log(moduleConfig.strava_id);
-                    this.log(this.tokens[moduleConfig.client_id].token);
+                    //this.log(moduleConfig.client_id);
+                    //this.log(this.tokens[moduleConfig.client_id].token);
                     const athleteId = this.tokens[moduleConfig.client_id].token.athlete.id;
                     // Call api
-                    this.getAthleteStats(accessToken, athleteId);
-
                     moment.locale(moduleConfig.locale);
-
-                    // Call api
-                    this.getAthleteActivities(accessToken, 1);
-
+                    if (accessToken && athleteId) {
+                        this.getAthleteStats(accessToken, athleteId);
+                    } else {
+                        this.log(`Access Token or Athlete ID invalid. Please re-validate or check your tokens.json file`)
+                    }
                 } catch (error) {
-                    this.log(`Athlete id not found!`);
+                    this.log(`Error in fetching data: $(error)`);
                 }
         } catch (error) {
-            this.log(`Error in fetching data`);
+            this.log(`Error in fetching data: $(error)`);
         }
     },
 
 
     getAthleteStats: function (accessToken, athleteId) {
-        this.log("Getting athlete stats for using " + athleteId);
+        this.log("Getting athlete stats for athlete " + athleteId);
         var moduleConfig = this.config;
         var statsData = new Object({});
         var self = this;
         strava.athletes.stats({ "access_token": accessToken, "id": athleteId }, function (err, payload, limits) {
-            if (err) {
-                self.log("Error!" +err);
-            } else if (limits.shortTermUsage >= 600 ||  limits.longTermUsage >= 30000) {
+            if (limits && (limits.shortTermUsage >= 600 ||  limits.longTermUsage >= 30000)) {
                 self.log("API LIMIT EXCEEDED");
                 self.sendSocketNotification("STATS", {});
             } else {
@@ -263,7 +256,7 @@ module.exports = NodeHelper.create({
                           if (statsData[value].distance && statsData[value].distance > 0) {
                             if (JSON.stringify(value).includes("run")) {
                               distance = (moduleConfig.units == "metric") ? (statsData[value].distance / 1000) : (statsData[value].distance / 1609.34);
-                              //moment.js "hack" to convert pace into m:ss. The number of seconds is added to start of the day (0:00) and the new "time is converted"
+                              //moment.js "hack" to convert pace into m:ss. The number of seconds is added to start of the day (0:00) and the new "time" is then converted
                               statsData[value].pace = moment().startOf("day").seconds(Math.round(statsData[value].moving_time / distance)).format("m:ss");
                             } else if (JSON.stringify(value).includes("ride")) {
                               distance = (moduleConfig.units == "metric") ? (statsData[value].distance) : (statsData[value].distance / 1.60934);
@@ -278,6 +271,7 @@ module.exports = NodeHelper.create({
                        }
                     }
                     self.sendSocketNotification("STATS", statsData);
+                    self.getAthleteActivities(accessToken, 1);
                 }
             }
         });
@@ -314,16 +308,14 @@ module.exports = NodeHelper.create({
 
         this.log("Fetching athlete activities after "+moment.unix(after).clone().format("YYYY-MM-DD")+", page "+page);
         strava.athlete.listActivities({ "access_token": accessToken, "after": after, "per_page": 200, "page": page }, function (err, payload, limits) {
-            if (err) {
-                self.log("Error!" +err);
-            } else if ((limits) && (limits.shortTermUsage >= 600 ||  limits.longTermUsage >= 30000)) {
+            if ((limits) && (limits.shortTermUsage >= 600 ||  limits.longTermUsage >= 30000)) {
                 self.log("API LIMIT EXCEEDED");
                 self.apiLimitExceeded = true;
                 self.sendSocketNotification("ACTIVITIES", self.activityList);
                 self.getSegments(accessToken);
             } else {
                 var activities = self.handleApiResponse(err, payload, limits);
-                if (activities) {
+                if (activities && Array.isArray(activities) && activities[1].id) {
                     self.apiLimitExceeded = false;
                     self.log(activities.length + " Activities found");
                     self.activityList = self.activityList.concat(activities);
@@ -341,6 +333,7 @@ module.exports = NodeHelper.create({
                         self.getSegments(accessToken);
                     }
                 } else {
+                  self.log("Fetched data was not valid!")
                   self.sendSocketNotification("ACTIVITIES", self.activityList);
                   self.getSegments(accessToken);
                 }
@@ -392,7 +385,7 @@ module.exports = NodeHelper.create({
 
         for (var i = 0; (i < this.activityList.length); i++) {
           if (!this.activityList[i].segmentsChecked && !this.apiLimitExceeded) {
-            this.log("Checking activity "+this.activityList[i].id+", i="+i);
+            //this.log("Checking activity "+this.activityList[i].id+", i="+i);
             apiCalls.push(new Promise((resolve, reject) => {
               strava.activities.get({ "access_token": accessToken, id: self.activityList[i].id, "include_all_efforts": true }, function (err, payload, limits) {
                 if (err) {
@@ -616,6 +609,7 @@ module.exports = NodeHelper.create({
             // Strava-v3 errors
             if (err) {
                 if (err.error && err.error.errors[0].field === "access_token" && err.error.errors[0].code === "invalid") {
+                    this.log(`Access Token invalid. Refreshing...`);
                     this.refreshTokens();
                 } else {
                     this.log({ error: err });
@@ -624,11 +618,12 @@ module.exports = NodeHelper.create({
             }
             // Strava Data
             if (payload) {
-               return payload;
+                //this.log(payload);
+                return payload;
             }
         } catch (error) {
              // Unknown response
-             this.log(`Unable to handle API response!`);
+             this.log("Unable to handle API response! Error: "+error);
         }
         return false;
     },

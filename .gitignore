@@ -43,6 +43,6 @@ tokens.json
 # Cache
 cache
 
-public/activities.json
-public/segments.json
-public/records.json
+public/activities*
+public/segments*
+public/records*
